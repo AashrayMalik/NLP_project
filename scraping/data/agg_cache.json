@@ -1,0 +1,528 @@
+{
+  "overview": {
+    "total_posts": 24932,
+    "total_comments": 93501,
+    "unique_post_authors": 20344,
+    "unique_comment_authors": 35227,
+    "avg_post_length": 856.1,
+    "avg_comment_length": 251.4,
+    "avg_post_score": 79.4,
+    "avg_comment_score": 9.7,
+    "earliest_post": 1743466876,
+    "latest_post": 1775000968
+  },
+  "posts_per_month": [
+    {
+      "month": "2025-04",
+      "count": 2201
+    },
+    {
+      "month": "2025-05",
+      "count": 2147
+    },
+    {
+      "month": "2025-06",
+      "count": 2233
+    },
+    {
+      "month": "2025-07",
+      "count": 2176
+    },
+    {
+      "month": "2025-08",
+      "count": 2061
+    },
+    {
+      "month": "2025-09",
+      "count": 2015
+    },
+    {
+      "month": "2025-10",
+      "count": 2034
+    },
+    {
+      "month": "2025-11",
+      "count": 1994
+    },
+    {
+      "month": "2025-12",
+      "count": 1982
+    },
+    {
+      "month": "2026-01",
+      "count": 2114
+    },
+    {
+      "month": "2026-02",
+      "count": 1945
+    },
+    {
+      "month": "2026-03",
+      "count": 2030
+    }
+  ],
+  "comments_per_month": [
+    {
+      "month": "2025-04",
+      "count": 8199
+    },
+    {
+      "month": "2025-05",
+      "count": 7996
+    },
+    {
+      "month": "2025-06",
+      "count": 8578
+    },
+    {
+      "month": "2025-07",
+      "count": 8301
+    },
+    {
+      "month": "2025-08",
+      "count": 7780
+    },
+    {
+      "month": "2025-09",
+      "count": 7473
+    },
+    {
+      "month": "2025-10",
+      "count": 7771
+    },
+    {
+      "month": "2025-11",
+      "count": 7422
+    },
+    {
+      "month": "2025-12",
+      "count": 7336
+    },
+    {
+      "month": "2026-01",
+      "count": 7991
+    },
+    {
+      "month": "2026-02",
+      "count": 7105
+    },
+    {
+      "month": "2026-03",
+      "count": 7549
+    }
+  ],
+  "flair_distribution": [
+    {
+      "flair": "Job searching",
+      "count": 3679
+    },
+    {
+      "flair": "Applications",
+      "count": 3081
+    },
+    {
+      "flair": "Interviews",
+      "count": 2700
+    },
+    {
+      "flair": "Leaving a job",
+      "count": 2273
+    },
+    {
+      "flair": "Post-interview",
+      "count": 1463
+    },
+    {
+      "flair": "Compensation",
+      "count": 1215
+    },
+    {
+      "flair": "Career planning",
+      "count": 1162
+    },
+    {
+      "flair": "Onboarding",
+      "count": 950
+    },
+    {
+      "flair": "Unemployment",
+      "count": 942
+    },
+    {
+      "flair": "Work/Life balance",
+      "count": 902
+    },
+    {
+      "flair": "Career development",
+      "count": 859
+    },
+    {
+      "flair": "Office relations",
+      "count": 811
+    },
+    {
+      "flair": "Article",
+      "count": 746
+    },
+    {
+      "flair": "Rejections",
+      "count": 523
+    },
+    {
+      "flair": "Resumes/CVs",
+      "count": 484
+    },
+    {
+      "flair": "Layoffs",
+      "count": 480
+    },
+    {
+      "flair": "Companies",
+      "count": 435
+    },
+    {
+      "flair": " HR ",
+      "count": 372
+    },
+    {
+      "flair": "Discipline",
+      "count": 284
+    },
+    {
+      "flair": "Recruiters",
+      "count": 275
+    },
+    {
+      "flair": "Education",
+      "count": 203
+    },
+    {
+      "flair": "Training",
+      "count": 159
+    },
+    {
+      "flair": "Contract work",
+      "count": 127
+    },
+    {
+      "flair": "Networking",
+      "count": 120
+    },
+    {
+      "flair": "Qualifications",
+      "count": 120
+    },
+    {
+      "flair": "Promotions",
+      "count": 109
+    },
+    {
+      "flair": "Internships",
+      "count": 106
+    },
+    {
+      "flair": "Temp work",
+      "count": 104
+    },
+    {
+      "flair": "References",
+      "count": 89
+    },
+    {
+      "flair": "Evaluations",
+      "count": 73
+    },
+    {
+      "flair": "Startups",
+      "count": 73
+    },
+    {
+      "flair": "Covid-19",
+      "count": 13
+    }
+  ],
+  "tier_breakdown": {
+    "high": 10674,
+    "low": 14258
+  },
+  "score_dist_posts": [
+    {
+      "bucket": "0",
+      "count": 6548
+    },
+    {
+      "bucket": "1-5",
+      "count": 11143
+    },
+    {
+      "bucket": "6-10",
+      "count": 1364
+    },
+    {
+      "bucket": "11-25",
+      "count": 1521
+    },
+    {
+      "bucket": "26-50",
+      "count": 1063
+    },
+    {
+      "bucket": "51-100",
+      "count": 984
+    },
+    {
+      "bucket": "100+",
+      "count": 2309
+    }
+  ],
+  "score_dist_comments": [
+    {
+      "bucket": "Negative",
+      "count": 295
+    },
+    {
+      "bucket": "0",
+      "count": 1077
+    },
+    {
+      "bucket": "1-5",
+      "count": 63038
+    },
+    {
+      "bucket": "6-10",
+      "count": 11231
+    },
+    {
+      "bucket": "11-25",
+      "count": 9896
+    },
+    {
+      "bucket": "26-50",
+      "count": 4514
+    },
+    {
+      "bucket": "51-100",
+      "count": 2242
+    },
+    {
+      "bucket": "100+",
+      "count": 1208
+    }
+  ],
+  "top_authors_posts": [
+    {
+      "author": "Low_Bodybuilder3065",
+      "post_count": 30,
+      "avg_score": 29.5
+    },
+    {
+      "author": "Acceptable_Offer_387",
+      "post_count": 21,
+      "avg_score": 7.8
+    },
+    {
+      "author": "u_HiredIn48",
+      "post_count": 19,
+      "avg_score": 168.8
+    },
+    {
+      "author": "swampwiz",
+      "post_count": 19,
+      "avg_score": 151.2
+    },
+    {
+      "author": "GubbaShump",
+      "post_count": 18,
+      "avg_score": 214.7
+    },
+    {
+      "author": "Ambitious-Sail-5188",
+      "post_count": 17,
+      "avg_score": 323.1
+    },
+    {
+      "author": "Eagles56",
+      "post_count": 16,
+      "avg_score": 112.9
+    },
+    {
+      "author": "Blueberry4672",
+      "post_count": 16,
+      "avg_score": 5.3
+    },
+    {
+      "author": "This-Top7398",
+      "post_count": 15,
+      "avg_score": 55.7
+    },
+    {
+      "author": "muddy_cat",
+      "post_count": 14,
+      "avg_score": 67.0
+    },
+    {
+      "author": "enlightenedshubham",
+      "post_count": 14,
+      "avg_score": 223.6
+    },
+    {
+      "author": "Revolutionary_West56",
+      "post_count": 14,
+      "avg_score": 84.7
+    },
+    {
+      "author": "No-Presentation298",
+      "post_count": 14,
+      "avg_score": 2873.7
+    },
+    {
+      "author": "Ihadenough1000",
+      "post_count": 14,
+      "avg_score": 222.7
+    },
+    {
+      "author": "DeeDeeQZ88",
+      "post_count": 14,
+      "avg_score": 29.4
+    }
+  ],
+  "top_authors_comments": [
+    {
+      "author": "natewOw",
+      "comment_count": 2072,
+      "avg_score": 5.5
+    },
+    {
+      "author": "BrainWaveCC",
+      "comment_count": 1411,
+      "avg_score": 7.6
+    },
+    {
+      "author": "jobs-ModTeam",
+      "comment_count": 1025,
+      "avg_score": 1.0
+    },
+    {
+      "author": "ChildOf1970",
+      "comment_count": 473,
+      "avg_score": 5.9
+    },
+    {
+      "author": "sweetdaisy99999",
+      "comment_count": 459,
+      "avg_score": 2.5
+    },
+    {
+      "author": "Mojojojo3030",
+      "comment_count": 358,
+      "avg_score": 6.5
+    },
+    {
+      "author": "Midnightfeelingright",
+      "comment_count": 276,
+      "avg_score": 5.9
+    },
+    {
+      "author": "Jedi4Hire",
+      "comment_count": 270,
+      "avg_score": 9.8
+    },
+    {
+      "author": "Investigator516",
+      "comment_count": 270,
+      "avg_score": 11.2
+    },
+    {
+      "author": "Noah_Fence_214",
+      "comment_count": 264,
+      "avg_score": 4.0
+    },
+    {
+      "author": "Affectionate_Ratio79",
+      "comment_count": 258,
+      "avg_score": 5.4
+    },
+    {
+      "author": "MysticWW",
+      "comment_count": 235,
+      "avg_score": 4.9
+    },
+    {
+      "author": "Skeggy-",
+      "comment_count": 227,
+      "avg_score": 6.5
+    },
+    {
+      "author": "professcorporate",
+      "comment_count": 226,
+      "avg_score": 4.7
+    },
+    {
+      "author": "Familiar-Range9014",
+      "comment_count": 221,
+      "avg_score": 10.0
+    }
+  ],
+  "avg_length_per_month": [
+    {
+      "month": "2025-04",
+      "avg_post_length": 859.8,
+      "avg_comment_length": 250.3
+    },
+    {
+      "month": "2025-05",
+      "avg_post_length": 830.2,
+      "avg_comment_length": 256.4
+    },
+    {
+      "month": "2025-06",
+      "avg_post_length": 804.8,
+      "avg_comment_length": 256.5
+    },
+    {
+      "month": "2025-07",
+      "avg_post_length": 825.0,
+      "avg_comment_length": 255.4
+    },
+    {
+      "month": "2025-08",
+      "avg_post_length": 861.8,
+      "avg_comment_length": 253.5
+    },
+    {
+      "month": "2025-09",
+      "avg_post_length": 829.9,
+      "avg_comment_length": 238.3
+    },
+    {
+      "month": "2025-10",
+      "avg_post_length": 838.5,
+      "avg_comment_length": 240.6
+    },
+    {
+      "month": "2025-11",
+      "avg_post_length": 835.5,
+      "avg_comment_length": 249.1
+    },
+    {
+      "month": "2025-12",
+      "avg_post_length": 945.3,
+      "avg_comment_length": 249.6
+    },
+    {
+      "month": "2026-01",
+      "avg_post_length": 879.4,
+      "avg_comment_length": 251.0
+    },
+    {
+      "month": "2026-02",
+      "avg_post_length": 905.6,
+      "avg_comment_length": 258.5
+    },
+    {
+      "month": "2026-03",
+      "avg_post_length": 934.9,
+      "avg_comment_length": 256.3
+    }
+  ]
+}
