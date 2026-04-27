@@ -1,0 +1,15 @@
+model,tag,n,chrf,bertscore_f1,citation_presence_rate,mean_citation_validity,adversarial_refusal_accuracy
+groq,adversarial,3,0.24091328089241465,,0.6666666666666666,1.0,0.3333333333333333
+groq,code_mix,9,0.2295638364565138,,0.7777777777777778,0.8809523809523809,0.0
+groq,multi_hop,1,0.14340461623316103,,0.0,,0.0
+groq,named_entity,5,0.21500709253308298,,1.0,1.0,0.0
+groq,reddit_slang,5,0.2225717949533202,,0.8,1.0,0.0
+groq,romanized,8,0.24558959503282327,,0.875,0.8857142857142857,0.0
+groq,standard,9,0.24183891050517192,,1.0,0.6296296296296297,0.0
+retrieval_only,adversarial,3,0.267452248722744,,0.0,,0.0
+retrieval_only,code_mix,9,0.19976324019582717,,0.0,,0.0
+retrieval_only,multi_hop,1,0.17608218997272285,,0.0,,0.0
+retrieval_only,named_entity,5,0.20304608511310912,,0.0,,0.0
+retrieval_only,reddit_slang,5,0.1982166156999093,,0.0,,0.0
+retrieval_only,romanized,8,0.20699848510795626,,0.0,,0.0
+retrieval_only,standard,9,0.17785601772438572,,0.0,,0.0

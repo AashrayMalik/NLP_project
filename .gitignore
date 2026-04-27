@@ -8,3 +8,10 @@ wheels/
 
 # Virtual environments
 .venv
+.env
+
+# Generated RAG artifacts
+scraping/data/rag_chroma/
+scraping/data/rag_graph.json
+scraping/data/rag_manifest.json
+evaluation/results/

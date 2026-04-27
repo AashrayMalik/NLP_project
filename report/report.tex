@@ -1,0 +1,892 @@
+\documentclass[11pt,a4paper]{article}
+
+% ── Packages ────────────────────────────────────────────────────────────
+\usepackage[margin=1in]{geometry}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{longtable}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{tabularx}
+\usepackage{array}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!60!black,
+  citecolor=blue!60!black,
+  urlcolor=blue!60!black,
+}
+
+\lstset{
+  basicstyle=\small\ttfamily,
+  breaklines=true,
+  frame=single,
+  backgroundcolor=\color{gray!8},
+  keywordstyle=\color{blue!70!black},
+  commentstyle=\color{green!50!black},
+  stringstyle=\color{red!60!black},
+  showstringspaces=false,
+}
+
+% ── Title ───────────────────────────────────────────────────────────────
+\title{
+  \textbf{NLP Analysis of the r/jobs Subreddit:}\\[0.4em]
+  \Large Topic Modelling, Stance Detection, Retrieval-Augmented QA,\\
+  and Hindi Cross-Lingual Evaluation
+}
+\author{NLP Project Report}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This report describes an end-to-end NLP system built over a large-scale Reddit corpus scraped from the \texttt{r/jobs} subreddit. The pipeline spans five major stages: (1)~data collection and cleaning, (2)~BERTopic-based topic modelling with trending/persistent classification, (3)~zero-shot stance detection per topic, (4)~a hybrid retrieval-augmented generation (RAG) question-answering system combining dense vector retrieval, graph expansion, and deterministic SQL facts, and (5)~a multi-track evaluation covering baseline English QA, Hindi cross-lingual QA, extended retrieval diagnostics, and a causal-overclaim audit. The entire system is served through an interactive Streamlit dashboard. We report results across ROUGE-L, BERTScore, chrF, citation quality, refusal accuracy, paraphrase stability, and comment retrievability metrics.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+% ════════════════════════════════════════════════════════════════════════
+\section{Introduction}
+\label{sec:intro}
+% ════════════════════════════════════════════════════════════════════════
+
+The \texttt{r/jobs} subreddit is one of the largest English-language forums for job seekers, providing a rich source of informal, community-generated discourse on employment, hiring practices, workplace issues, and career advice. Understanding the thematic structure, temporal dynamics, and polarisation of this discourse requires several complementary NLP techniques.
+
+This project addresses four research questions:
+
+\begin{enumerate}[leftmargin=*]
+  \item \textbf{What are the dominant themes?} We apply BERTopic to discover latent topic clusters and classify each as persistent or trending.
+  \item \textbf{What is the community's stance?} We use zero-shot NLI-based classification to measure support, opposition, and neutrality within each topic.
+  \item \textbf{Can we build a grounded QA system?} We construct a hybrid RAG pipeline that answers questions exclusively from corpus evidence, and evaluate it in both English and Hindi.
+  \item \textbf{How robust is the retrieval?} We go beyond answer-level similarity and probe retrieval behaviour with structure-preservation checks, comment retrievability tests, and paraphrase stability analysis.
+\end{enumerate}
+
+The remainder of this report is organised as follows. Section~\ref{sec:data} covers data collection and cleaning. Section~\ref{sec:nlp} describes the NLP analysis modules (topic modelling, trending classification, stance detection, and jargon normalisation). Section~\ref{sec:rag} presents the RAG system architecture. Section~\ref{sec:eval} details the multi-track evaluation framework. Section~\ref{sec:results} reports the quantitative results. Section~\ref{sec:causal} discusses the causal-overclaim audit. Section~\ref{sec:app} describes the interactive Streamlit application. Section~\ref{sec:limitations} discusses limitations, and Section~\ref{sec:conclusion} concludes.
+
+
+% ════════════════════════════════════════════════════════════════════════
+\section{Data Collection and Cleaning}
+\label{sec:data}
+% ════════════════════════════════════════════════════════════════════════
+
+\subsection{Scraping Strategy}
+\label{sec:scraping}
+
+The corpus was scraped from the \texttt{r/jobs} subreddit using the Arctic Shift API, a third-party archive of Reddit data that provides historical access to submissions and comments. The scraper targets \textbf{25,000 qualifying posts} across 8 calendar months (approximately April 2025 through March 2026), with an automatic backward extension of up to 12 additional months if the initial window falls short.
+
+\subsubsection{Qualifying Criteria}
+
+A post qualifies for inclusion if it satisfies all of the following:
+\begin{itemize}[leftmargin=*]
+  \item Body text length exceeds 20 characters.
+  \item The body is not \texttt{[removed]} or \texttt{[deleted]}.
+  \item The post has at least 1 comment.
+\end{itemize}
+
+\subsubsection{Engagement-Based Diversity Split}
+
+To ensure the corpus contains both high-engagement viral posts and lower-engagement niche discussions, we enforce a diversity split:
+\begin{itemize}[leftmargin=*]
+  \item \textbf{60\% high-engagement tier}: posts with $\geq 10$ comments.
+  \item \textbf{40\% low-engagement tier}: posts with 1--9 comments.
+\end{itemize}
+
+Each calendar month has a quota of 3,125 posts (1,875 high + 1,250 low). This prevents temporal bias where a single viral month dominates the corpus.
+
+\subsubsection{Adaptive Bucketing}
+
+The scraper uses an adaptive time-bucketing strategy to handle dense time periods:
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Base bucket}: 1 day.
+  \item \textbf{Auto-split}: any bucket returning $\geq 900$ raw results is split in half recursively, with a floor of 1 hour.
+  \item \textbf{Pagination}: within each bucket, up to 10 pages of 100 results are fetched.
+  \item \textbf{Sort order}: newest-first (\texttt{desc}) within each time window.
+\end{itemize}
+
+\subsubsection{Comment Collection}
+
+For each qualifying post, the scraper fetches up to the \textbf{top 5 comments by Reddit score}. This is a deliberate design choice: top comments represent the community's most endorsed responses. However, it means the corpus does not contain full discussion threads, and this caveat must be reflected in all downstream analysis and QA.
+
+\subsubsection{Persistence}
+
+All data is stored in a local SQLite database (\texttt{jobs\_posts.db}) with WAL journaling enabled for safe concurrent access and crash recovery. Tables use \texttt{INSERT OR REPLACE} semantics, allowing the scraper to be safely re-run for incremental collection.
+
+The database schema consists of two primary tables:
+\begin{itemize}[leftmargin=*]
+  \item \texttt{posts}: columns for \texttt{id}, \texttt{title}, \texttt{body}, \texttt{score}, \texttt{created\_utc}, \texttt{author}, \texttt{num\_comments}, \texttt{flair}, \texttt{month}, and \texttt{tier}.
+  \item \texttt{comments}: columns for \texttt{id}, \texttt{post\_id} (foreign key), \texttt{body}, \texttt{score}, \texttt{author}, and \texttt{created\_utc}.
+\end{itemize}
+
+Indices are created on \texttt{score}, \texttt{flair}, \texttt{month}, \texttt{tier}, and \texttt{post\_id} for efficient querying throughout the pipeline.
+
+
+\subsection{Data Cleaning Pipeline}
+\label{sec:cleaning}
+
+The raw scraped data undergoes a comprehensive 16-step cleaning pipeline, executed in a fixed order to avoid cascading issues:
+
+\begin{enumerate}[leftmargin=*]
+  \item \textbf{Database backup}: timestamped copy before any modifications.
+  \item \textbf{Spam removal}: posts matching 8 known templated spam patterns (money-making, referral link spam) are deleted using SQL \texttt{LIKE} patterns.
+  \item \textbf{Bot removal}: posts from known bot accounts (AutoModerator, RemindMeBot, etc.) are removed.
+  \item \textbf{Megathread removal}: sticky placeholder posts containing ``Megathread'' in the title or body.
+  \item \textbf{Deduplication}: duplicate-body posts are resolved by keeping the highest-scored copy, using a \texttt{ROW\_NUMBER()} window function partitioned by body text.
+  \item \textbf{URL-only removal}: posts whose body is essentially a bare URL ($< 200$ characters, starts with \texttt{http}).
+  \item \textbf{Text normalisation} (posts): a multi-step regex pipeline that:
+  \begin{itemize}
+    \item Decodes HTML entities (\texttt{\&amp;}, \texttt{\&lt;}, etc.)
+    \item Removes zero-width spaces (\texttt{\&\#x200B;}, \texttt{U+200B})
+    \item Converts Markdown links \texttt{[text](url)} to plain text
+    \item Strips bare URLs and Reddit-specific links (\texttt{/r/}, \texttt{/u/})
+    \item Removes Markdown formatting (bold, italic, strikethrough, headers)
+    \item Strips emoji characters across all Unicode blocks
+    \item Removes edit footers (``Edit:'', ``ETA:'')
+    \item Collapses excess whitespace while preserving paragraph structure
+    \item Expands Reddit/workplace jargon via the normalisation module
+  \end{itemize}
+  \item \textbf{Deleted-author comment removal}: comments from \texttt{[deleted]} or \texttt{NULL} authors.
+  \item \textbf{Short comment removal}: comments shorter than 10 characters.
+  \item \textbf{Bot comment removal}: comments from the same bot account list.
+  \item \textbf{Comment deduplication}: per-post duplicate comment bodies resolved by highest score.
+  \item \textbf{Comment text normalisation}: same pipeline as posts.
+  \item \textbf{Orphan comment removal}: comments whose parent post was deleted in earlier steps.
+  \item \textbf{Zero-comment post removal}: posts that lost all comments during cleaning.
+  \item \textbf{num\_comments recalculation}: updated to reflect actual cleaned comment counts.
+  \item \textbf{VACUUM}: database compaction.
+\end{enumerate}
+
+
+\subsection{Reddit Jargon Normalisation}
+\label{sec:jargon}
+
+A dedicated jargon normalisation module expands over 80 Reddit and workplace abbreviations at word boundaries, appending the expansion in parentheses to preserve readability. This is applied at chunk-creation time (not retroactively to the database) so that embedding models can match semantically equivalent text. Categories include:
+
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Workplace/HR}: PIP (performance improvement plan), RIF (reduction in force), FTE (full-time employee), etc.
+  \item \textbf{Compensation}: TC (total compensation), RSU (restricted stock unit), OTE (on-target earnings), COBRA, ESPP.
+  \item \textbf{Work arrangements}: WFH (work from home), RTO (return to office), PTO (paid time off), FMLA.
+  \item \textbf{Job search}: ATS (applicant tracking system), YOE (years of experience), HM (hiring manager), BGC (background check).
+  \item \textbf{Company tiers}: FAANG, MAANG, WITCH, B4 (Big Four), MBB (McKinsey Bain BCG).
+  \item \textbf{Reddit slang}: TLDR, IMO, FWIW, YMMV, DAE, AITA, NTA, etc.
+\end{itemize}
+
+The module also strips \texttt{/s} sarcasm tags that Reddit users append to mark ironic comments.
+
+
+% ════════════════════════════════════════════════════════════════════════
+\section{NLP Analysis Modules}
+\label{sec:nlp}
+% ════════════════════════════════════════════════════════════════════════
+
+\subsection{Topic Modelling with BERTopic}
+\label{sec:topics}
+
+\subsubsection{Pipeline Architecture}
+
+Topic discovery follows a four-stage pipeline:
+
+\begin{enumerate}[leftmargin=*]
+  \item \textbf{Embedding}: All post bodies (title concatenated with body) are encoded using \texttt{all-MiniLM-L6-v2} (384-dimensional sentence embeddings, $\sim$80\,MB model). This model was chosen for its strong speed/quality trade-off on short informal text.
+  
+  \item \textbf{Dimensionality reduction}: UMAP reduces embeddings to 5 dimensions with the following hyperparameters:
+  \begin{itemize}
+    \item \texttt{n\_neighbors} = 15 (local neighbourhood size)
+    \item \texttt{min\_dist} = 0.0 (tight clusters)
+    \item \texttt{metric} = cosine
+    \item \texttt{random\_state} = 42 (reproducibility)
+  \end{itemize}
+  UMAP was preferred over PCA or t-SNE because it preserves both local and global structure, which is critical for density-based clustering.
+
+  \item \textbf{Clustering}: HDBSCAN discovers clusters with:
+  \begin{itemize}
+    \item \texttt{min\_cluster\_size} = 150 (minimum posts per topic)
+    \item \texttt{min\_samples} = 5
+    \item \texttt{cluster\_selection\_method} = ``eom'' (Excess of Mass)
+  \end{itemize}
+  HDBSCAN automatically determines the number of clusters and gracefully assigns noise points as outliers.
+
+  \item \textbf{Keyword extraction}: BERTopic's class-based TF-IDF (c-TF-IDF) extracts distinctive keywords per topic. A custom \texttt{CountVectorizer} with domain-specific stop words ensures that ubiquitous terms like ``job'', ``company'', ``hired'', ``employee'' do not dominate topic representations. The vectoriser uses unigram and bigram features (\texttt{ngram\_range=(1,2)}) with a minimum document frequency of~5.
+\end{enumerate}
+
+\subsubsection{Design Choices}
+
+\begin{itemize}[leftmargin=*]
+  \item \textbf{BERTopic over LDA}: BERTopic captures semantic meaning via transformer embeddings rather than relying on bag-of-words co-occurrence. This is especially important for Reddit text, where informal language and abbreviations make traditional topic models fragile.
+  \item \textbf{Domain-specific stop words}: over 60 domain-specific stop words were manually curated (``job'', ``jobs'', ``work'', ``company'', ``employer'', ``position'', ``role'', ``career'', ``hired'', ``hiring'', etc.) in addition to sklearn's English stop words. This dramatically improved keyword interpretability.
+  \item \textbf{Outlier reduction}: after the initial fit, outliers are reassigned to their nearest topic cluster using embedding-distance with a threshold of 0.5. The remaining outliers are preserved in a dedicated ``Outlier / Uncategorised'' cluster.
+  \item \textbf{Topic merging}: if the initial cluster count exceeds 18, topics are merged down to the target range of 8--18 topics.
+\end{itemize}
+
+\subsubsection{Persistence}
+
+Results are saved to two new database tables:
+\begin{itemize}[leftmargin=*]
+  \item \texttt{topics}: ID, label, keywords (JSON array), post count, corpus share percentage, and trend type.
+  \item \texttt{post\_topics}: mapping of each post ID to its assigned topic ID.
+\end{itemize}
+
+Embeddings are persisted as a NumPy array (\texttt{topic\_embeddings.npy}) and representative documents as a JSON file for use by the Streamlit dashboard.
+
+
+\subsection{Trending vs.\ Persistent Topic Classification}
+\label{sec:trending}
+
+For each discovered topic, we compute monthly post counts across all available months and classify the topic's temporal behaviour using three features:
+
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Presence}: fraction of months in which the topic has $> 0$ posts.
+  \item \textbf{Coefficient of Variation (CV)}: $\sigma / \mu$ of monthly counts, measuring volume stability.
+  \item \textbf{Spike detection}: whether any single month exceeds $2\times$ the mean count.
+  \item \textbf{Linear trend slope}: least-squares regression over time, normalised by mean count.
+\end{itemize}
+
+Classification uses a combination of absolute and relative thresholds:
+
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Persistent}: appears in $\geq 70\%$ of months AND CV in the bottom third across topics AND low normalised slope. These are stable, ever-present discussion themes.
+  \item \textbf{Trending}: has a spike (some month $> 2\times$ mean) OR appears in $< 50\%$ of months OR CV/slope in the top third. These are topics that emerged recently or surged.
+  \item \textbf{Seasonal}: everything else --- moderate variation without extreme spikes.
+\end{itemize}
+
+The relative thresholding (using percentiles of CV and slope distributions) was introduced because in the \texttt{r/jobs} corpus, all topics appear in nearly every month. Absolute thresholds like ``presence $< 50\%$'' would classify nothing as trending, since the subreddit consistently generates posts across all themes.
+
+
+\subsection{Stance Detection}
+\label{sec:stance}
+
+For each topic, we perform zero-shot stance classification on comments to measure community sentiment:
+
+\subsubsection{Method}
+
+\begin{enumerate}[leftmargin=*]
+  \item \textbf{Discussion frame construction}: for each topic, the top 5 highest-scored posts are loaded. Their titles and the topic's display label are combined into a broader reference frame, e.g., ``\textit{Topic focus: Interview Process Frustrations. Representative posts: Why do employers ghost candidates? | ...}''.
+  
+  \item \textbf{Classifier}: the \texttt{facebook/bart-large-mnli} model is used in a zero-shot classification pipeline with candidate labels:
+  \begin{itemize}
+    \item ``supporting the parent post''
+    \item ``opposing the parent post''
+    \item ``neutral or unclear''
+  \end{itemize}
+  
+  \item \textbf{Input formatting}: each comment is paired with its parent post title (truncated to 96 characters) and comment body (truncated to 180 characters), formatted as: ``\texttt{Post: [title] Comment: [body]}''.
+  
+  \item \textbf{Confidence guardrails}: predictions are downgraded to ``neutral'' if:
+  \begin{itemize}
+    \item The top label's confidence is below 0.45, OR
+    \item The margin between the top two labels is below 0.03, OR
+    \item The top label is already ``neutral or unclear''.
+  \end{itemize}
+  These guardrails prevent weak predictions from inflating support/opposition counts.
+  
+  \item \textbf{Batched inference}: comments are processed in batches of 16 with truncation at 256 tokens.
+\end{enumerate}
+
+\subsubsection{Output}
+
+For each topic, the module produces:
+\begin{itemize}[leftmargin=*]
+  \item Percentage and count breakdowns for ``for'', ``opposing'', and ``neutral'' stances.
+  \item Unique user counts per stance bucket.
+  \item Top 5 highest-scored comments per stance as representative arguments.
+  \item The reference frame and stance method metadata for reproducibility.
+\end{itemize}
+
+Up to 100 comments per topic are classified (sorted by Reddit score to prioritise high-engagement responses).
+
+
+\subsubsection{Design Rationale}
+
+Zero-shot classification was chosen because:
+\begin{itemize}[leftmargin=*]
+  \item It eliminates the need for labelled training data, which does not exist for Reddit-specific stance tasks.
+  \item BART-large-MNLI provides strong performance on natural language inference without fine-tuning.
+  \item The extractive summarisation approach (top quotes rather than generated summaries) is fully offline and reproducible.
+\end{itemize}
+
+
+% ════════════════════════════════════════════════════════════════════════
+\section{RAG System Architecture}
+\label{sec:rag}
+% ════════════════════════════════════════════════════════════════════════
+
+The retrieval-augmented generation (RAG) system is designed to answer user questions about the \texttt{r/jobs} corpus using only grounded evidence. It combines three retrieval channels and supports multiple answer-generation backends.
+
+\subsection{Chunking and Indexing}
+\label{sec:chunking}
+
+The corpus is divided into three types of retrieval units (chunks):
+
+\subsubsection{Post Chunks}
+
+Posts are chunked using a paragraph-aware splitting strategy:
+\begin{itemize}[leftmargin=*]
+  \item The post body is split at paragraph boundaries (double newlines).
+  \item Paragraphs are packed into chunks of up to 380 tokens with 60-token overlap between consecutive chunks.
+  \item If a single paragraph exceeds the target, it is split at word boundaries with overlap.
+  \item Each chunk is prepended with a structured header containing: title, flair, topic label, month, post score, and chunk position.
+  \item If the full post (header + body) fits within 450 tokens, it is indexed as a single chunk.
+\end{itemize}
+
+\subsubsection{Comment Chunks}
+
+Comments are indexed as atomic (unsplit) chunks, each prepended with contextual metadata:
+\begin{itemize}[leftmargin=*]
+  \item Parent post title
+  \item Parent post body snippet (first 80 tokens)
+  \item Flair, topic label, month, and comment score
+  \item Comment body truncated to 420 tokens
+\end{itemize}
+
+\subsubsection{Topic Summary Chunks}
+
+Each BERTopic-discovered topic is indexed as a synthetic summary chunk containing:
+\begin{itemize}[leftmargin=*]
+  \item The display label and raw BERTopic label
+  \item Keywords, post count, and corpus share percentage
+  \item Trend type (persistent/trending/seasonal)
+  \item Stance summary (for/opposing/neutral percentages)
+  \item Top representative arguments per stance
+  \item Representative post excerpts
+\end{itemize}
+
+All chunk text undergoes Reddit jargon normalisation (Section~\ref{sec:jargon}) at creation time to improve embedding-level matching.
+
+
+\subsection{Vector Store}
+\label{sec:vectorstore}
+
+Chunks are embedded using \textbf{BAAI/bge-small-en-v1.5}, a 384-dimensional sentence embedding model from the BGE family. This model was specifically chosen for Mac compatibility (runs efficiently on CPU and Apple MPS) and its strong performance on retrieval benchmarks at a compact size.
+
+Key implementation details:
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Storage}: ChromaDB with persistent disk storage (HNSW index with cosine distance).
+  \item \textbf{Query prefixing}: following BGE best practices, queries are prefixed with ``\texttt{Represent this sentence:}'' before encoding.
+  \item \textbf{Batch indexing}: chunks are indexed in batches of 1,024 with GPU/MPS cache clearing between batches.
+  \item \textbf{Normalisation}: all embeddings are L2-normalised for cosine similarity.
+  \item \textbf{Similarity conversion}: ChromaDB returns cosine distances; these are converted to similarities as $\text{sim} = \max(0, 1 - \text{dist})$.
+\end{itemize}
+
+
+\subsection{Semantic Graph}
+\label{sec:graph}
+
+A lightweight object-level graph is built using NetworkX to encode structural relationships in the corpus. Node types include:
+
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Post nodes}: linked to flair, month, and topic nodes.
+  \item \textbf{Comment nodes}: linked to their parent post node.
+  \item \textbf{Topic nodes}: linked to trend-type nodes and stance-bucket nodes.
+  \item \textbf{Flair nodes}: shared across posts with the same Reddit flair.
+  \item \textbf{Month nodes}: shared across posts from the same calendar month.
+  \item \textbf{Trend nodes}: ``persistent'', ``trending'', ``seasonal''.
+  \item \textbf{Stance nodes}: per-topic stance buckets (for, opposing, neutral) with percentage and count metadata.
+\end{itemize}
+
+The graph is persisted as a JSON file using NetworkX's node-link format. During retrieval, the graph enables multi-hop expansion from seed nodes to discover related evidence that may not appear in the initial vector search.
+
+
+\subsection{Hybrid Retrieval and Reranking}
+\label{sec:retrieval}
+
+At query time, the retriever performs a four-stage pipeline:
+
+\subsubsection{Step 1: Query Classification}
+
+The query is classified into one of four types using keyword matching (including Hindi keywords for cross-lingual support):
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Factual}: ``how many'', ``count'', ``total'', ``distribution'', ``time period''
+  \item \textbf{Trend}: ``trending'', ``persistent'', ``over time'', ``seasonal''
+  \item \textbf{Opinion}: ``think'', ``feel'', ``advice'', ``recommend'', ``attitude''
+  \item \textbf{General}: default fallback
+\end{itemize}
+
+\subsubsection{Step 2: Dense Vector Retrieval}
+
+The top 28 chunks (configurable via \texttt{DEFAULT\_RETRIEVAL\_K}) are retrieved from ChromaDB by cosine similarity.
+
+\subsubsection{Step 3: Graph Expansion}
+
+From the top 10 initial results, seed nodes are extracted (post, comment, topic, flair, month) and expanded up to 2 hops in the graph. For each reachable node, the corresponding chunks are fetched from the vector store (up to 80 graph candidates).
+
+\subsubsection{Step 4: SQL Facts}
+
+For factual and trend queries, deterministic SQL evidence is generated directly from the database:
+\begin{itemize}[leftmargin=*]
+  \item Corpus counts (posts, comments)
+  \item Date range and monthly bucket count
+  \item Comment collection policy (max and average comments per post)
+  \item Top flair distribution
+  \item Topic lists with counts, shares, and trend types
+\end{itemize}
+
+\subsubsection{Reranking}
+
+All candidates (vector, graph, SQL) are merged and scored using a weighted combination:
+
+\[
+  \text{score} = 0.68 \times \text{sim} + \text{boost}_\text{score} + \text{boost}_\text{graph} + \text{boost}_\text{source}
+\]
+
+where:
+\begin{itemize}[leftmargin=*]
+  \item $\text{boost}_\text{score} = \min\left(\frac{\ln(1 + \text{karma})}{12}, 0.35\right)$ rewards high-karma content.
+  \item $\text{boost}_\text{graph} = \max(0, 0.25 - 0.07 \times d)$ where $d$ is graph distance.
+  \item $\text{boost}_\text{source}$ is query-type-dependent. For example, factual queries give 0.45 to SQL facts and 0.18 to topic summaries; opinion queries give 0.24 to comments.
+\end{itemize}
+
+The final top 10 evidence items (configurable via \texttt{DEFAULT\_FINAL\_K}) are returned with full provenance metadata.
+
+
+\subsection{Answer Generation}
+\label{sec:generation}
+
+The system supports three generation backends:
+
+\begin{enumerate}[leftmargin=*]
+  \item \textbf{Groq} (LLaMA 3.3-70B Versatile): fast inference via the Groq API with temperature 0.2 and 700 max tokens.
+  \item \textbf{Gemini} (Gemini 2.5 Flash): Google's generative AI with temperature 0.2 and 1000 max tokens.
+  \item \textbf{Retrieval-only}: a debug/baseline mode that returns formatted evidence without calling any LLM.
+\end{enumerate}
+
+The system prompt enforces strict grounding rules:
+\begin{itemize}[leftmargin=*]
+  \item Use only the evidence in the context.
+  \item Refuse if evidence is weak or absent.
+  \item Do not invent statistics, companies, dates, or claims.
+  \item Summarise community opinions as tendencies, not universal beliefs.
+  \item Remember that comments are collected top comments, not exhaustive full threads.
+  \item Cite evidence IDs inline (e.g., \texttt{[comment:abc123]}).
+  \item Answer in the requested target language (English or Hindi).
+\end{itemize}
+
+
+% ════════════════════════════════════════════════════════════════════════
+\section{Evaluation Framework}
+\label{sec:eval}
+% ════════════════════════════════════════════════════════════════════════
+
+The system is evaluated across four tracks, each targeting a different aspect of performance.
+
+
+\subsection{Track 1: Baseline English QA}
+\label{sec:eval-english}
+
+The English evaluation uses a hand-written ground-truth set (\texttt{qa\_set.jsonl}) containing factual, opinion, trend, and adversarial questions with gold-standard answers and answerability labels.
+
+\subsubsection{Metrics}
+\begin{itemize}[leftmargin=*]
+  \item \textbf{ROUGE-L}: longest common subsequence F-measure between generated and gold answers.
+  \item \textbf{BERTScore F1}: contextual embedding similarity using \texttt{roberta-large}.
+  \item \textbf{Faithfulness}: manual binary label (1 = faithful, 0 = hallucinated) reviewed via \texttt{faithfulness\_review.csv}.
+  \item \textbf{Adversarial refusal accuracy}: for unanswerable questions, whether the model correctly refuses using predefined refusal phrases.
+  \item \textbf{Citation presence}: whether the generated answer contains any bracketed citations.
+  \item \textbf{Citation validity}: fraction of cited IDs that appear in the retrieved evidence pool.
+\end{itemize}
+
+\begin{table}[H]
+\centering
+\caption{Baseline English QA metrics (16 questions, 3 adversarial).}
+\label{tab:english-metrics}
+\begin{tabular}{lcccccc}
+\toprule
+Model & ROUGE-L & BERTScore F1 & Citation Pres. & Citation Val. & Refusal Acc. \\
+\midrule
+Gemini 2.5 Flash  & \textbf{0.284} & \textbf{0.872} & 75.0\% & 60.4\% & \textbf{100\%} \\
+Groq (LLaMA 3.3-70B) & 0.184 & 0.851 & \textbf{87.5\%} & \textbf{68.7\%} & \textbf{100\%} \\
+Retrieval-only    & 0.082 & 0.724 & 0.0\%  & --     & 0.0\%  \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Both LLM backends achieve 100\% adversarial refusal accuracy, correctly declining all three unanswerable questions (quantum computing in Antarctica, single best employer, nursing salaries in Singapore). Gemini achieves the highest ROUGE-L (0.284) and BERTScore F1 (0.872), indicating stronger lexical and semantic overlap with gold answers, while Groq leads on citation metrics (87.5\% presence, 68.7\% validity), suggesting it is more disciplined about grounding its answers in the retrieved evidence pool.
+
+
+\subsection{Track 2: Hindi Cross-Lingual QA}
+\label{sec:eval-hindi}
+
+The cross-lingual evaluation tests the system's ability to answer questions asked in \textbf{Hindi} while retrieving from an \textbf{English} corpus.
+
+\subsubsection{Dataset Design}
+
+The Hindi benchmark (\texttt{hindi\_qa\_set.jsonl}) contains 30 examples spanning:
+\begin{itemize}[leftmargin=*]
+  \item Factual questions (e.g., corpus size, date range)
+  \item Opinion-summary questions
+  \item Trend-comparison questions
+  \item Adversarial questions (unanswerable by design)
+  \item Code-mixed Hindi-English inputs (e.g., ``\textit{job search mein kya tips hain?}'')
+  \item Romanised Hindi inputs
+  \item Named-entity and acronym-heavy cases
+\end{itemize}
+
+Each item stores: Hindi question, Hindi reference answer, English reference answer, answerability label, type, tags, and an English retrieval bridge query. The retrieval bridge is critical because the indexed corpus and embedding model (\texttt{bge-small-en-v1.5}) are English-oriented.
+
+\subsubsection{Metrics}
+\begin{itemize}[leftmargin=*]
+  \item \textbf{chrF}: character n-gram F-score (up to order 6, $\beta = 2$), computed without external dependencies via a custom implementation.
+  \item \textbf{Multilingual BERTScore F1}: using \texttt{bert-base-multilingual-cased}.
+  \item \textbf{Refusal accuracy}: for unanswerable questions, correct refusal in Hindi.
+  \item \textbf{Citation presence \& validity}: same as English track.
+  \item \textbf{Manual fluency}: 1--5 scale reviewed in \texttt{hindi\_manual\_review.csv}.
+  \item \textbf{Manual adequacy}: 1--5 scale for information completeness.
+  \item \textbf{Causal claim detection}: automatic flag for answers containing causal language in English or Hindi.
+\end{itemize}
+
+\begin{table}[H]
+\centering
+\caption{Hindi cross-lingual QA metrics (30 questions, 3 adversarial).}
+\label{tab:hindi-metrics}
+\begin{tabular}{lcccccc}
+\toprule
+Model & chrF & BERTScore F1 & Citation Pres. & Citation Val. & Refusal Acc. \\
+\midrule
+Gemini 2.5 Flash      & \textbf{0.261} & \textbf{0.781} & 80.0\% & 73.8\% & \textbf{100\%} \\
+Groq (LLaMA 3.3-70B) & 0.233 & 0.764 & \textbf{86.7\%} & \textbf{80.9\%} & 33.3\%$^\dagger$ \\
+Retrieval-only       & 0.198 & 0.652 & 0.0\%  & --     & 0.0\%  \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+$^\dagger$\textit{Note: Groq's adversarial refusal accuracy of 33\% reflects that it correctly refuses in romanised Hindi (e.g., ``koi vishesh jaankari uplabdh nahin hai''), but only 1 of 3 refusals was detected by the evaluation markers. Gemini issues refusals in standard Devanagari, which are fully captured.}
+
+A tag-level breakdown is also computed, allowing granular analysis across input variants:
+
+\begin{table}[H]
+\centering
+\caption{Hindi chrF by input tag (Groq).}
+\label{tab:hindi-tags}
+\begin{tabular}{lcc}
+\toprule
+Tag & chrF & $n$ \\
+\midrule
+standard        & 0.241 & 8 \\
+code\_mix       & 0.232 & 8 \\
+romanized       & 0.261 & 4 \\
+named\_entity   & 0.256 & 5 \\
+reddit\_slang   & 0.262 & 4 \\
+multi\_hop      & 0.161 & 1 \\
+adversarial     & 0.190 & 2 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Romanised and Reddit-slang inputs achieve the highest chrF scores (0.261, 0.262) because shared English vocabulary acts as character-level anchoring. Multi-hop reasoning (0.161) is the weakest category, consistent with the challenge of combining evidence from multiple retrieval results.
+
+
+\subsection{Track 3: Extended Retrieval Diagnostics}
+\label{sec:eval-diagnostics}
+
+Beyond answer-level metrics, the diagnostics track evaluates \textbf{retrieval behaviour}:
+
+\subsubsection{Query Type Accuracy}
+
+Each diagnostic question specifies its expected query type (factual, trend, opinion, general). The metric is the fraction of questions where the system's automatic classification matches the expected type.
+
+\subsubsection{Structure Preservation (Source-Type Hit Rate)}
+
+Questions specify which evidence source types \textit{must} appear in the top-$k$ results (e.g., a factual question about corpus size should retrieve \texttt{sql\_fact} evidence). The hit rate measures whether the retriever surfaces the correct evidence categories.
+
+\subsubsection{Comment Requirement Satisfaction}
+
+For opinion and comment-heavy questions, a minimum number of comment-type evidence items is required. The satisfaction rate measures compliance.
+
+\subsubsection{Paraphrase Stability}
+
+Paraphrase groups contain semantically equivalent queries (e.g., ``What are the most discussed topics?'' and ``Which themes come up most often?''). For each pair within a group, the Jaccard similarity of their retrieved evidence ID sets is computed. High Jaccard indicates stable retrieval under paraphrasing.
+
+\begin{table}[H]
+\centering
+\caption{Extended retrieval diagnostics.}
+\label{tab:diagnostic-metrics}
+\begin{tabular}{llllll}
+\toprule
+Model & Query Type Acc. & Source Hit & Comment Sat. & Avg Comment Ev. & Paraphrase Jaccard \\
+\midrule
+retrieval\_only & 0.667 & 1.000 & 1.000 & 5.83 & 0.213 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+\subsubsection{Comment Retrievability Probes}
+
+A separate probe routine tests whether specific comments can be retrieved when used as query seeds:
+
+\begin{enumerate}[leftmargin=*]
+  \item \textbf{Stratified sampling}: 24 comments are selected across month $\times$ score-bucket strata (low/mid/high thirds by karma).
+  \item \textbf{Probe query construction}: for each sampled comment, a synthetic query is built from its parent post title, topic label, and comment excerpt.
+  \item \textbf{Metrics}: initial hit rate (comment appears in vector candidates), final hit rate (comment appears in reranked top-$k$), and mean final rank when hit.
+\end{enumerate}
+
+\begin{table}[H]
+\centering
+\caption{Sampled comment retrievability probes.}
+\label{tab:comment-probes}
+\begin{tabular}{llll}
+\toprule
+Sampled Probes & Initial Hit Rate & Final Hit Rate & Mean Final Rank \\
+\midrule
+6.00 & 0.833 & 0.500 & 7.67 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+\subsection{Track 4: Causal Overclaim Audit}
+\label{sec:eval-causal}
+
+This track specifically targets \textbf{unsupported causal language} in generated answers. The system's knowledge graph is structural (capturing Reddit relationships like post--comment, post--topic, post--month), \textit{not} causal. It does not model or identify causal effects.
+
+The audit operates at two levels:
+
+\begin{enumerate}[leftmargin=*]
+  \item \textbf{Automatic detection}: a regex-based scanner flags answers containing causal language patterns in English (``because'', ``caused by'', ``led to'', ``results in'', ``due to'', ``the reason is'') and Hindi (``\texthindi{की वजह से}'', ``\texthindi{के कारण}'', ``\texthindi{इससे}'').
+  
+  \item \textbf{Manual review}: flagged answers are exported to \texttt{causal\_overclaim\_review.csv} where a human reviewer marks each as 1 (overclaim confirmed) or 0 (causal language is justified or hedge-qualified).
+\end{enumerate}
+
+This is especially relevant for topics like AI layoffs, hiring slowdowns, or workplace behaviour where Reddit comments frequently imply explanatory mechanisms (``companies are ghosting because...'') without establishing actual causality.
+
+
+% ════════════════════════════════════════════════════════════════════════
+\section{Results and Analysis}
+\label{sec:results}
+% ════════════════════════════════════════════════════════════════════════
+
+\subsection{Corpus Statistics}
+
+Table~\ref{tab:corpus-overview} summarises the cleaned corpus:
+
+\begin{table}[H]
+\centering
+\caption{Cleaned corpus overview.}
+\label{tab:corpus-overview}
+\begin{tabular}{lr}
+\toprule
+Metric & Value \\
+\midrule
+Total posts & $\sim$25,000 \\
+Total collected top comments & $\sim$80,000--100,000 \\
+Collection period & Apr 2025 -- Mar 2026 \\
+Monthly buckets & 12 \\
+Engagement split & 60\% high / 40\% low \\
+Comments per post (max) & 5 (top by score) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{English QA Results}
+
+Table~\ref{tab:english-metrics} summarises the English QA results across three backends. Key observations:
+
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Gemini outperforms Groq on ROUGE-L} (0.284 vs.\ 0.184). Gemini's answers tend to be more structured and include specific counts from SQL evidence (e.g., listing exact flair distributions with numerical counts), which aligns more closely with the gold answer format.
+  
+  \item \textbf{Groq cites more and cites better.} Groq achieves 87.5\% citation presence and 68.7\% validity, compared to Gemini's 75.0\% and 60.4\%. Groq consistently embeds evidence IDs inline (e.g., \texttt{[comment:ndms9ju]}), while Gemini occasionally omits citations for opinion-summary questions.
+  
+  \item \textbf{Both models handle adversarial questions well.} All three adversarial questions (quantum computing in Antarctica, single best employer, nursing salaries in Singapore) are correctly refused by both LLMs with clear ``not enough evidence'' phrasing.
+  
+  \item \textbf{Factual questions are strongest.} Gemini scores ROUGE-L 0.667 on q03 (time period), where the gold answer and generated answer share most content words. Conversely, opinion-summary questions (q07, q10) score lowest because generated answers are substantially longer and more detailed than the concise gold references.
+  
+  \item \textbf{Retrieval-only baseline} (ROUGE-L 0.082) confirms that raw evidence blocks, while relevant, do not produce answer-like text. This baseline validates that the observed LLM scores reflect genuine synthesis capability.
+\end{itemize}
+
+\subsection{Hindi Cross-Lingual QA Results}
+
+Table~\ref{tab:hindi-metrics} presents the Hindi cross-lingual QA results. The evaluation tests the system's ability to answer questions posed in Hindi (Devanagari, romanised, and code-mixed variants) while retrieving from an English-only corpus.
+
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Gemini leads on chrF} (0.261 vs.\ Groq's 0.233). Consistent with the English results, Gemini generates more structured and lexically aligned answers, producing higher character n-gram overlap with the Hindi gold references. Both scores are moderate, which is expected for open-ended QA where generated answers are typically 3--8 sentences versus 1--2 sentence gold references.
+  
+  \item \textbf{Groq leads on citation grounding}: Groq achieves 86.7\% citation presence and 80.9\% validity, compared to Gemini's 80.0\% and 73.8\%. This mirrors the English track pattern where Groq is more disciplined about inline evidence attribution.
+  
+  \item \textbf{Gemini handles adversarial refusal perfectly} (100\%), issuing clear Devanagari refusals (``\texthindi{पर्याप्त साक्ष्य उपलब्ध नहीं है}''). Groq achieves 33\% because it refuses in romanised Hindi, which the marker-based detector only partially captures.
+  
+  \item \textbf{Code-mixed inputs are handled well} (chrF 0.232 vs.\ standard 0.241 for Groq). Both models correctly interpret Hindi-English mixed queries like ``\textit{job search mein kya tips hain?}'' without degradation.
+  
+  \item \textbf{Romanised Hindi inputs slightly outperform Devanagari} (chrF 0.261 vs.\ 0.241). This suggests the models' training data includes substantial romanised Hindi content, and shared English characters provide additional n-gram overlap.
+  
+  \item \textbf{Multi-hop reasoning is weakest} (chrF 0.161). The single multi-hop question requires combining evidence from multiple retrieval results, which remains challenging for the pipeline.
+  
+  \item \textbf{Retrieval bridge is essential}: the English retrieval query bypass mechanism is critical because \texttt{bge-small-en-v1.5} has no Hindi vocabulary. Without the bridge, Hindi questions would produce near-zero retrieval recall.
+\end{itemize}
+
+\subsection{Retrieval Diagnostics}
+
+Key findings from the diagnostics track:
+
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Source-type hit rate = 1.000}: the retriever always surfaces the expected evidence categories (SQL facts for factual queries, topic summaries for trend queries).
+  \item \textbf{Comment satisfaction = 1.000}: all comment-requiring queries receive sufficient comment evidence.
+  \item \textbf{Average comment evidence = 5.83}: queries reliably surface multiple comment perspectives.
+  \item \textbf{Query type accuracy = 0.667}: the keyword-based classifier misclassifies some queries, particularly ambiguous ones at the factual/opinion boundary.
+  \item \textbf{Paraphrase Jaccard = 0.213}: evidence overlap across paraphrased queries is moderate, indicating that retrieval is somewhat sensitive to wording. This is partially expected with dense retrieval over short informal text.
+\end{itemize}
+
+\subsection{Comment Probe Results}
+
+The comment probe analysis reveals a gap between initial and final retrieval:
+
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Initial hit rate = 0.833}: most probe comments appear in the initial vector candidates.
+  \item \textbf{Final hit rate = 0.500}: after reranking, only half survive into the top-10. This suggests the reranking formula sometimes deprioritises comments in favour of post chunks or topic summaries.
+  \item \textbf{Mean final rank = 7.67}: when a comment does survive, it tends to appear near the bottom of the top-10.
+\end{itemize}
+
+
+% ════════════════════════════════════════════════════════════════════════
+\section{Causal Overclaim Audit}
+\label{sec:causal}
+% ════════════════════════════════════════════════════════════════════════
+
+The system's graph is \textbf{structural}, not causal. It preserves Reddit's hierarchical structure (posts, comments, topics, flairs, months) and temporal grouping, but it does not identify or claim causal effects between variables.
+
+This distinction is critical because the \texttt{r/jobs} corpus is observational community data. Users frequently express perceived explanations (``I keep getting ghosted because companies are using AI screening''), but these are anecdotes and opinions, not evidence of causal relationships.
+
+The causal-overclaim audit flags answers that use attributive language such as:
+\begin{itemize}[leftmargin=*]
+  \item English: ``because'', ``caused'', ``led to'', ``results in'', ``due to'', ``the reason is''
+  \item Hindi: ``\texthindi{की वजह से}'', ``\texthindi{के कारण}'', ``\texthindi{कारण है}'', ``\texthindi{इससे}''
+\end{itemize}
+
+Flagged answers are exported for manual review. The human reviewer determines whether the causal language is:
+\begin{enumerate}[leftmargin=*]
+  \item \textbf{Justified}: the evidence directly supports the causal claim.
+  \item \textbf{Hedged}: the answer qualifies the claim with language like ``users report that...'' or ``some commenters believe...''.
+  \item \textbf{Overclaimed}: the answer presents correlation or anecdote as established causation.
+\end{enumerate}
+
+
+% ════════════════════════════════════════════════════════════════════════
+\section{Interactive Application}
+\label{sec:app}
+% ════════════════════════════════════════════════════════════════════════
+
+The entire system is delivered through a multi-page Streamlit application with sidebar navigation. The application loads precomputed analysis results from cached JSON files and the SQLite database, ensuring instant startup without re-running expensive pipelines.
+
+\subsection{Dashboard Page}
+
+Displays aggregate corpus statistics via KPI cards (total posts, comments, unique authors, average lengths and scores), monthly activity bar charts, flair distribution pie charts, engagement tier breakdowns, score distributions, and average length trends over time.
+
+\subsection{Topic Analysis Page}
+
+Presents discovered topics as interactive cards with display labels, keyword badges, corpus share percentages, and trend-type badges. A topic-vs-flair analysis chart identifies gaps where topics are not well-covered by existing Reddit flairs. Expandable details show representative posts and model-assigned labels.
+
+\subsection{Trends Page}
+
+Visualises trending vs.\ persistent classifications with monthly sparklines colour-coded by trend type (green for persistent, amber for trending, cyan for seasonal). Narrative summaries automatically describe the temporal dynamics of the corpus.
+
+\subsection{Stance Detection Page}
+
+Displays per-topic stance distributions with stacked bars (for/opposing/neutral) and representative argument quotes styled with colour-coded borders. Users can explore individual topic stances and their top arguments.
+
+\subsection{Question Answering Page}
+
+Provides an interactive QA interface with:
+\begin{itemize}[leftmargin=*]
+  \item Model selection (Groq, Gemini, retrieval-only)
+  \item Example question chips for common queries
+  \item Styled answer panels with inline evidence citations
+  \item Expandable evidence details showing source type, topic, flair, month, and score
+\end{itemize}
+
+\subsection{Design Choices}
+
+The application uses a custom dark-theme CSS system with:
+\begin{itemize}[leftmargin=*]
+  \item Inter font family (Google Fonts) for clean, modern typography.
+  \item Purple accent palette (\texttt{\#8b5cf6}, \texttt{\#c4b5fd}) for interactive elements.
+  \item Glassmorphism-inspired card components with subtle hover effects.
+  \item Plotly charts configured with a transparent dark theme matching the application aesthetic.
+  \item All visualisations are generated using Plotly Express and Plotly Graph Objects for interactivity.
+\end{itemize}
+
+
+% ════════════════════════════════════════════════════════════════════════
+\section{Technical Architecture Summary}
+\label{sec:architecture}
+% ════════════════════════════════════════════════════════════════════════
+
+Table~\ref{tab:tech-stack} summarises the key technologies and libraries used across the project.
+
+\begin{table}[H]
+\centering
+\caption{Technology stack.}
+\label{tab:tech-stack}
+\begin{tabularx}{\textwidth}{lX}
+\toprule
+Component & Technology \\
+\midrule
+Data collection & Arctic Shift API, requests, SQLite (WAL mode) \\
+Text processing & regex-based pipeline, custom jargon normaliser \\
+Topic modelling & BERTopic, all-MiniLM-L6-v2 (sentence-transformers), UMAP, HDBSCAN \\
+Stance detection & facebook/bart-large-mnli (HuggingFace transformers), zero-shot classification \\
+Vector store & ChromaDB (persistent, HNSW with cosine distance) \\
+Retrieval embeddings & BAAI/bge-small-en-v1.5 (sentence-transformers) \\
+Semantic graph & NetworkX \\
+Answer generation & Groq (LLaMA 3.3-70B), Gemini 2.5 Flash, retrieval-only baseline \\
+Evaluation metrics & rouge-score, bert-score, custom chrF, custom citation extraction \\
+Interactive UI & Streamlit, Plotly \\
+Package management & uv (pyproject.toml) \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+
+% ════════════════════════════════════════════════════════════════════════
+\section{Limitations}
+\label{sec:limitations}
+% ════════════════════════════════════════════════════════════════════════
+
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Comment sampling bias}: only the top 5 comments per post were collected, so the corpus does not represent full discussion threads. Lower-scored and deeply nested replies are systematically absent.
+  
+  \item \textbf{Cross-lingual retrieval dependency}: the Hindi QA task relies on an English corpus and an English-oriented retriever (\texttt{bge-small-en-v1.5}). Cross-lingual performance depends partly on the manually authored English retrieval bridge queries. A multilingual embedding model would remove this dependency.
+  
+  \item \textbf{Observational data}: the dataset is observational Reddit data. It supports descriptions of tendencies, anecdotes, and community perceptions, but not causal claims. The causal-overclaim audit partially addresses this, but cannot prevent all instances of ungrounded attribution.
+  
+  \item \textbf{Manual review bottleneck}: faithfulness, Hindi fluency, Hindi adequacy, and causal-overclaim labels all require human review. The system provides structured review files (\texttt{.csv}) but cannot automate these judgements.
+  
+  \item \textbf{Paraphrase sensitivity}: the relatively low paraphrase Jaccard (0.213) indicates that retrieval results can shift substantially with wording changes. Cross-encoder reranking or query expansion could mitigate this.
+  
+  \item \textbf{Comment reranking bias}: the comment probe analysis shows that the reranking formula deprioritises comments relative to posts and topic summaries. Tuning the query-type-specific source boosts could improve comment visibility for opinion queries.
+  
+  \item \textbf{Topic model granularity}: with a minimum cluster size of 150, some fine-grained themes may be absorbed into broader topics. Reducing this parameter would yield more specific topics but also more fragmentation and noise.
+  
+  \item \textbf{Temporal scope}: the corpus spans $\sim$12 months. Longer collection windows would better capture seasonal patterns and long-term trends but at proportionally higher storage and compute costs.
+\end{itemize}
+
+
+% ════════════════════════════════════════════════════════════════════════
+\section{Conclusion}
+\label{sec:conclusion}
+% ════════════════════════════════════════════════════════════════════════
+
+This project demonstrates a comprehensive NLP pipeline for analysing informal community discourse on Reddit. The system combines modern topic modelling (BERTopic), zero-shot stance detection (BART-MNLI), and a hybrid RAG architecture (dense vectors + semantic graph + SQL facts) to provide grounded, citable answers about the \texttt{r/jobs} subreddit.
+
+The multi-track evaluation framework goes beyond standard answer-similarity metrics to probe retrieval behaviour, cross-lingual robustness, citation grounding, and causal-language discipline. The interactive Streamlit dashboard makes the analysis accessible to non-technical users.
+
+Key contributions include:
+\begin{enumerate}[leftmargin=*]
+  \item A production-quality data pipeline with comprehensive cleaning and jargon normalisation.
+  \item A three-channel hybrid retrieval system with query-type-aware reranking.
+  \item Hindi cross-lingual QA evaluation with retrieval bridge queries and character-level metrics.
+  \item Extended retrieval diagnostics including paraphrase stability and comment retrievability probes.
+  \item A causal-overclaim audit framework for grounding discipline in corpus-backed QA.
+\end{enumerate}
+
+Future work could explore multilingual embedding models to eliminate the retrieval bridge dependency, cross-encoder reranking for improved paraphrase stability, and fine-tuned stance classifiers with Reddit-specific training data.
+
+
+\end{document}

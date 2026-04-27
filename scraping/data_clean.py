@@ -41,6 +41,8 @@ import shutil
 import sqlite3
 from datetime import datetime
 
+from nlp_logic.reddit_jargon import normalize_jargon
+
 
 # config
 
@@ -135,9 +137,15 @@ def normalise_text(text: str) -> str:
     # Emojis → remove
     text = _RE_EMOJI.sub("", text)
 
+    # Edit footers → remove ("Edit: ...", "ETA: ...")
+    text = _RE_EDIT_FOOTER.sub("", text)
+
     # Collapse whitespace (preserve newlines for paragraph structure)
     text = _RE_WHITESPACE.sub(" ", text)
     text = _RE_BLANKLINES.sub("\n\n", text)
+
+    # Expand Reddit/workplace jargon for downstream NLP
+    text = normalize_jargon(text)
 
     return text.strip()
 

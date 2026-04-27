@@ -22,4 +22,11 @@ dependencies = [
     "umap-learn>=0.5.0",
     "plotly>=6.0.0",
     "wordcloud>=1.9.0",
+    "chromadb>=0.5.0",
+    "networkx>=3.0",
+    "groq>=0.11.0",
+    "google-genai>=0.5.0",
+    "rouge-score>=0.1.2",
+    "bert-score>=0.3.13",
+    "python-dotenv>=1.0.0",
 ]

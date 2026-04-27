@@ -1,0 +1,2 @@
+model,n,query_type_accuracy,source_type_hit_rate,comment_required_satisfaction_rate,average_comment_evidence_count,paraphrase_mean_jaccard,citation_presence_rate,mean_citation_validity,causal_claim_rate
+retrieval_only,12,0.6666666666666666,1.0,1.0,5.833333333333333,0.21323529411764708,0.0,,0.0
