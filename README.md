@@ -144,15 +144,6 @@ Outputs are written to `evaluation/diagnostics/`:
 - `comment_probe_results.csv`: sampled comment retrievability probes
 - `causal_overclaim_review.csv`: manual review sheet for unsupported causal wording
 
-## Report
-
-The LaTeX report lives in `report/report.tex`.
-
-Refresh the table fragments used by the report:
-
-```bash
-python report/generate_report_assets.py
-```
 
 ## Corpus Caveat
 
