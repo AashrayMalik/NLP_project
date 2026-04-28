@@ -127,22 +127,6 @@ Outputs are written to `evaluation/hindi_results/`:
 - `tag_breakdown.csv`: edge-case breakdown for code-mixed, romanized, named-entity, and adversarial subsets
 - `hindi_manual_review.csv`: mark `fluency_manual`, `adequacy_manual`, and `causal_overclaim_manual`
 
-## Extended RAG Diagnostics
-
-The extended retrieval checks live in `evaluation/rag_diagnostic_set.jsonl`.
-
-Run diagnostics:
-
-```bash
-uv run python evaluate_rag_diagnostics.py --model retrieval_only
-```
-
-Outputs are written to `evaluation/diagnostics/`:
-
-- `diagnostic_results.csv`: per-query retrieval behavior
-- `metrics_summary.csv`: source-type hit rates, comment satisfaction, paraphrase stability, and citation quality
-- `comment_probe_results.csv`: sampled comment retrievability probes
-- `causal_overclaim_review.csv`: manual review sheet for unsupported causal wording
 
 
 ## Corpus Caveat
