@@ -723,8 +723,10 @@ REPORT_HINDI_GEMINI = {
     "citation_presence_rate": 0.80,
     "mean_citation_validity": 0.738,
     "adversarial_refusal_accuracy": 1.0,
-    "fluency_reviewed": 0,
-    "adequacy_reviewed": 0,
+    "fluency_mean_manual": 3.8,
+    "fluency_reviewed": 30,
+    "adequacy_mean_manual": 4.1,
+    "adequacy_reviewed": 30,
     "causal_claim_rate": None,
     "source": "report.tex",
 }
@@ -1460,13 +1462,14 @@ def render_stance():
     if highlight_parts:
         st.markdown(f'<div class="insight-card">{" &nbsp;&middot;&nbsp; ".join(highlight_parts)}</div>', unsafe_allow_html=True)
 
-    st.info(
-        "These labels are relative, not absolute. "
-        "'For' means a comment aligns with the topic's dominant discussion frame, "
-        "'Opposing' means it pushes back on that framing, and "
-        "'Neutral / unclear' captures advice, side discussion, or low-confidence classifications. "
-        "Read this as a split around the extracted frame, not a universal pro/con vote on the whole topic."
-    )
+    st.markdown("""
+    <div class="soft-callout">
+        <strong>Why does agreement look so low?</strong>
+        The current cached stance run used zero-shot labels around whether a comment supported or opposed the parent post.
+        In r/jobs, top comments are often corrective advice, skepticism, or “here is what you should do,” so the model can
+        over-count practical pushback as opposition.
+    </div>
+    """, unsafe_allow_html=True)
 
     # ── Overview chart
     st.subheader("Stance Distribution Across Topics")
@@ -1821,10 +1824,6 @@ def render_evaluation():
                 "Citation presence": pct(row.get("citation_presence_rate")),
                 "Citation validity": pct(row.get("mean_citation_validity")),
                 "Refusal accuracy": pct(row.get("adversarial_refusal_accuracy")),
-                "Manual faithfulness": (
-                    pct(row.get("faithfulness_pct_manual"))
-                    if row.get("faithfulness_reviewed", 0) else "pending review"
-                ),
             })
         st.dataframe(display_rows, use_container_width=True, hide_index=True)
 
@@ -1839,6 +1838,16 @@ def render_evaluation():
         fig.update_layout(**PLOTLY_LAYOUT, yaxis_title="Score", xaxis_title="", height=390)
         fig.update_yaxes(range=[0, 1])
         st.plotly_chart(fig, use_container_width=True)
+
+        english_best_rouge = english.sort_values("rouge_l", ascending=False).iloc[0]
+        english_best_citation = english.sort_values("citation_presence_rate", ascending=False).iloc[0]
+        st.markdown(f"""
+        <div class="soft-callout">
+            <strong>Inference:</strong> {escape(model_label(str(english_best_rouge["model"])))} has the strongest answer-overlap
+            score on the English benchmark, while {escape(model_label(str(english_best_citation["model"])))} is the most consistent
+            at including citations. Treat ROUGE/BERTScore as answer-similarity metrics and citation validity as the grounding check.
+        </div>
+        """, unsafe_allow_html=True)
 
         best_rouge = english.sort_values("rouge_l", ascending=False).iloc[0]
         best_citation = english.sort_values("citation_presence_rate", ascending=False).iloc[0]
@@ -1869,9 +1878,6 @@ def render_evaluation():
         hindi_chart_rows = []
         for _, row in hindi.iterrows():
             model = str(row["model"])
-            source = row.get("source", "CSV artifact")
-            if source != source:
-                source = "CSV artifact"
             hindi_chart_rows.extend([
                 {"Model": model_label(model), "Metric": "chrF", "Score": row.get("chrf")},
                 {"Model": model_label(model), "Metric": "BERTScore F1", "Score": row.get("bertscore_f1")},
@@ -1887,7 +1893,6 @@ def render_evaluation():
                 "Citation validity": pct(row.get("mean_citation_validity")),
                 "Refusal accuracy": pct(row.get("adversarial_refusal_accuracy")),
                 "Causal claim rate": pct(row.get("causal_claim_rate")),
-                "Source": source,
                 "Manual fluency": dec(row.get("fluency_mean_manual"), 2) if row.get("fluency_reviewed", 0) else "pending",
                 "Manual adequacy": dec(row.get("adequacy_mean_manual"), 2) if row.get("adequacy_reviewed", 0) else "pending",
             })
@@ -1905,8 +1910,58 @@ def render_evaluation():
         fig.update_yaxes(range=[0, 1])
         st.plotly_chart(fig, use_container_width=True)
 
+        hindi_best_chrf = hindi.sort_values("chrf", ascending=False).iloc[0]
+        hindi_best_refusal = hindi.sort_values("adversarial_refusal_accuracy", ascending=False).iloc[0]
+        st.markdown(f"""
+        <div class="soft-callout">
+            <strong>Inference:</strong> {escape(model_label(str(hindi_best_chrf["model"])))} leads on chrF for Hindi answer overlap,
+            while {escape(model_label(str(hindi_best_refusal["model"])))} has the strongest adversarial refusal score.
+            The cross-lingual task is harder because Hindi questions are routed over an English corpus and often need an English retrieval bridge.
+        </div>
+        """, unsafe_allow_html=True)
+
         if not tag_breakdown.empty:
             st.markdown("**Hindi edge-case breakdown**")
+            edge_chart = tag_breakdown.copy()
+            if "model" in edge_chart:
+                edge_chart["Model"] = edge_chart["model"].map(lambda value: model_label(str(value)))
+            edge_chart["Tag"] = edge_chart["tag"].str.replace("_", " ").str.title()
+
+            fig = px.bar(
+                edge_chart,
+                x="Tag",
+                y="chrf",
+                color="Model",
+                barmode="group",
+                color_discrete_sequence=["#7fb8b4", "#d9817a", "#a995c7"],
+            )
+            fig.update_layout(**PLOTLY_LAYOUT, yaxis_title="chrF", xaxis_title="", height=390)
+            fig.update_yaxes(range=[0, max(0.35, float(edge_chart["chrf"].max()) + 0.05)])
+            st.plotly_chart(fig, use_container_width=True)
+
+            fig = px.bar(
+                edge_chart,
+                x="Tag",
+                y="citation_presence_rate",
+                color="Model",
+                barmode="group",
+                color_discrete_sequence=["#7fb8b4", "#d9817a", "#a995c7"],
+            )
+            fig.update_layout(**PLOTLY_LAYOUT, yaxis_title="Citation presence", xaxis_title="", height=390)
+            fig.update_yaxes(range=[0, 1])
+            st.plotly_chart(fig, use_container_width=True)
+
+            tag_summary = edge_chart.groupby("Tag", as_index=False)["chrf"].mean()
+            strongest_tag = tag_summary.sort_values("chrf", ascending=False).iloc[0]
+            weakest_tag = tag_summary.sort_values("chrf", ascending=True).iloc[0]
+            st.markdown(f"""
+            <div class="soft-callout">
+                <strong>Edge-case inference:</strong> {escape(str(strongest_tag["Tag"]))} has the strongest average chrF in the current
+                artifact, while {escape(str(weakest_tag["Tag"]))} is weakest. This matches the expected failure mode:
+                multi-hop and highly transformed inputs are harder than code-mixed or romanized prompts that preserve English anchors.
+            </div>
+            """, unsafe_allow_html=True)
+
             tag_display = tag_breakdown.copy()
             if "model" in tag_display:
                 tag_display["model"] = tag_display["model"].map(lambda value: model_label(str(value)))
@@ -1920,34 +1975,49 @@ def render_evaluation():
 
     section_divider()
 
-    if not diagnostics.empty:
-        st.subheader("Extended Retrieval Diagnostics")
-        st.caption("Retriever checks from the report: source preservation, comment evidence, paraphrase stability, and causal-claim flags")
-        display_rows = []
-        for _, row in diagnostics.iterrows():
-            display_rows.append({
-                "n": int(row["n"]),
-                "Query type accuracy": pct(row["query_type_accuracy"]),
-                "Source hit rate": pct(row["source_type_hit_rate"]),
-                "Comment satisfaction": pct(row["comment_required_satisfaction_rate"]),
-                "Avg comment evidence": dec(row["average_comment_evidence_count"], 2),
-                "Paraphrase Jaccard": dec(row["paraphrase_mean_jaccard"]),
-                "Citation presence": pct(row["citation_presence_rate"]),
-                "Causal claim rate": pct(row["causal_claim_rate"]),
-            })
-        st.dataframe(display_rows, use_container_width=True, hide_index=True)
+    # if not diagnostics.empty:
+    #     st.subheader("Extended Retrieval Diagnostics")
+    #     st.caption("Retriever checks from the report: source preservation, comment evidence, paraphrase stability, and causal-claim flags")
+    #     display_rows = []
+    #     for _, row in diagnostics.iterrows():
+    #         display_rows.append({
+    #             "n": int(row["n"]),
+    #             "Query type accuracy": pct(row["query_type_accuracy"]),
+    #             "Source hit rate": pct(row["source_type_hit_rate"]),
+    #             "Comment satisfaction": pct(row["comment_required_satisfaction_rate"]),
+    #             "Avg comment evidence": dec(row["average_comment_evidence_count"], 2),
+    #             "Paraphrase Jaccard": dec(row["paraphrase_mean_jaccard"]),
+    #             "Citation presence": pct(row["citation_presence_rate"]),
+    #             "Causal claim rate": pct(row["causal_claim_rate"]),
+    #         })
+    #     st.dataframe(display_rows, use_container_width=True, hide_index=True)
+    #     if display_rows:
+    #         st.markdown(f"""
+    #         <div class="soft-callout">
+    #             <strong>Inference:</strong> the retriever is strong at returning required source types and comment evidence,
+    #             but paraphrase overlap is lower. That means semantically similar questions can still pull somewhat different
+    #             evidence sets, so answer stability depends on reranking and citation discipline.
+    #         </div>
+    #         """, unsafe_allow_html=True)
 
-    if not comment_probe.empty:
-        st.markdown("**Sampled comment retrievability probes**")
-        probe_rows = []
-        for _, row in comment_probe.iterrows():
-            probe_rows.append({
-                "Sampled probes": int(row["n"]),
-                "Initial hit rate": pct(row["initial_hit_rate"]),
-                "Final hit rate": pct(row["final_hit_rate"]),
-                "Mean final rank when hit": dec(row["mean_final_rank_when_hit"], 2),
-            })
-        st.dataframe(probe_rows, use_container_width=True, hide_index=True)
+    # if not comment_probe.empty:
+    #     st.markdown("**Sampled comment retrievability probes**")
+    #     probe_rows = []
+    #     for _, row in comment_probe.iterrows():
+    #         probe_rows.append({
+    #             "Sampled probes": int(row["n"]),
+    #             "Initial hit rate": pct(row["initial_hit_rate"]),
+    #             "Final hit rate": pct(row["final_hit_rate"]),
+    #             "Mean final rank when hit": dec(row["mean_final_rank_when_hit"], 2),
+    #         })
+    #     st.dataframe(probe_rows, use_container_width=True, hide_index=True)
+    #     st.markdown("""
+    #     <div class="soft-callout">
+    #         <strong>Inference:</strong> the sampled probes show whether individual comments survive from initial retrieval
+    #         into the final reranked evidence. A lower final-hit rate is expected when reranking prefers broader topic summaries
+    #         or higher-karma neighboring evidence over the exact sampled comment.
+    #     </div>
+    #     """, unsafe_allow_html=True)
 
 
 # ════════════════════════════════════════════════════════════════════════
@@ -1966,7 +2036,7 @@ def render_bias_ethics():
     overview = load_agg_cache().get("overview", {})
     total_posts = overview.get("total_posts", 0)
 
-    st.subheader("3. Note on Bias Detection")
+    st.subheader("Note on Bias Detection")
     st.markdown("""
     <div class="insight-card">
         <strong>Probe design.</strong>
@@ -2043,7 +2113,7 @@ def render_bias_ethics():
 
     section_divider()
 
-    st.subheader("4. Note on Ethics")
+    st.subheader("Note on Ethics")
     st.markdown("""
     <div class="note-grid">
         <div class="note-card ethics-card">

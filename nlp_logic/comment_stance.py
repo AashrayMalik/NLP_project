@@ -200,9 +200,9 @@ def classify_stances(comments: list[dict], classifier) -> list[dict]:
             outputs = classifier(
                 batch,
                 candidate_labels=[
-                    "supporting the parent post",
-                    "opposing the parent post",
-                    "neutral or unclear",
+                    "validates the parent author's concern",
+                    "challenges the parent author's interpretation",
+                    "gives practical advice or is unclear",
                 ],
                 hypothesis_template=hypothesis,
                 multi_label=False,
@@ -223,12 +223,12 @@ def classify_stances(comments: list[dict], classifier) -> list[dict]:
                 margin = top_score - float(scores[1]) if len(scores) > 1 else top_score
 
                 if (
-                    top_label == "neutral or unclear"
+                    top_label == "gives practical advice or is unclear"
                     or top_score < MIN_STANCE_CONFIDENCE
                     or margin < MIN_STANCE_MARGIN
                 ):
                     stance = "neutral"
-                elif top_label == "supporting the parent post":
+                elif top_label == "validates the parent author's concern":
                     stance = "for"
                 else:
                     stance = "opposing"
@@ -356,6 +356,15 @@ def run_pipeline(db_path: str | Path | None = None):
         summary["total_comments_analysed"] = len(comments)
         summary["stance_method"] = {
             "labels": ["for", "opposing", "neutral"],
+            "candidate_labels": [
+                "validates the parent author's concern",
+                "challenges the parent author's interpretation",
+                "gives practical advice or is unclear",
+            ],
+            "axis": (
+                "Comment alignment with the parent author's framing. "
+                "Advice-only comments are treated as neutral rather than disagreement."
+            ),
             "min_confidence": MIN_STANCE_CONFIDENCE,
             "min_margin": MIN_STANCE_MARGIN,
         }
