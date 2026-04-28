@@ -50,7 +50,7 @@
 \maketitle
 
 \begin{abstract}
-This report describes an end-to-end NLP system built over a large-scale Reddit corpus scraped from the \texttt{r/jobs} subreddit. The pipeline spans five major stages: (1)~data collection and cleaning, (2)~BERTopic-based topic modelling with trending/persistent classification, (3)~zero-shot stance detection per topic, (4)~a hybrid retrieval-augmented generation (RAG) question-answering system combining dense vector retrieval, graph expansion, and deterministic SQL facts, and (5)~a multi-track evaluation covering baseline English QA, Hindi cross-lingual QA, extended retrieval diagnostics, and a causal-overclaim audit. The entire system is served through an interactive Streamlit dashboard. We report results across ROUGE-L, BERTScore, chrF, citation quality, refusal accuracy, paraphrase stability, and comment retrievability metrics.
+This report describes an end-to-end NLP course project built over a large-scale Reddit corpus scraped from the \texttt{r/jobs} subreddit. The pipeline spans five major stages: (1)~data collection and cleaning, (2)~BERTopic-based topic modelling with heuristic stable/spike-prone/variable trend signals, (3)~zero-shot stance detection per topic, (4)~a hybrid retrieval-augmented generation (RAG) question-answering system combining dense vector retrieval, graph expansion, and deterministic SQL facts, and (5)~a multi-track evaluation covering baseline English QA, Hindi cross-lingual QA, extended retrieval diagnostics, and a causal-overclaim audit. The entire system is served through an interactive Streamlit dashboard designed for final project presentation and exploration. We report results across ROUGE-L, BERTScore, chrF, citation quality, refusal accuracy, paraphrase stability, and comment retrievability metrics.
 \end{abstract}
 
 \tableofcontents
@@ -66,7 +66,7 @@ The \texttt{r/jobs} subreddit is one of the largest English-language forums for 
 This project addresses four research questions:
 
 \begin{enumerate}[leftmargin=*]
-  \item \textbf{What are the dominant themes?} We apply BERTopic to discover latent topic clusters and classify each as persistent or trending.
+  \item \textbf{What are the dominant themes?} We apply BERTopic to discover latent topic clusters and derive stable, spike-prone, or variable temporal signals.
   \item \textbf{What is the community's stance?} We use zero-shot NLI-based classification to measure support, opposition, and neutrality within each topic.
   \item \textbf{Can we build a grounded QA system?} We construct a hybrid RAG pipeline that answers questions exclusively from corpus evidence, and evaluate it in both English and Hindi.
   \item \textbf{How robust is the retrieval?} We go beyond answer-level similarity and probe retrieval behaviour with structure-preservation checks, comment retrievability tests, and paraphrase stability analysis.
@@ -239,7 +239,7 @@ Results are saved to two new database tables:
 Embeddings are persisted as a NumPy array (\texttt{topic\_embeddings.npy}) and representative documents as a JSON file for use by the Streamlit dashboard.
 
 
-\subsection{Trending vs.\ Persistent Topic Classification}
+\subsection{Topic Trend Signals}
 \label{sec:trending}
 
 For each discovered topic, we compute monthly post counts across all available months and classify the topic's temporal behaviour using three features:
@@ -251,15 +251,17 @@ For each discovered topic, we compute monthly post counts across all available m
   \item \textbf{Linear trend slope}: least-squares regression over time, normalised by mean count.
 \end{itemize}
 
-Classification uses a combination of absolute and relative thresholds:
+Classification uses a combination of absolute and relative thresholds. In the
+final Streamlit interface, these stored classes are presented with gentler
+interpretive labels because most themes appear in most months:
 
 \begin{itemize}[leftmargin=*]
-  \item \textbf{Persistent}: appears in $\geq 70\%$ of months AND CV in the bottom third across topics AND low normalised slope. These are stable, ever-present discussion themes.
-  \item \textbf{Trending}: has a spike (some month $> 2\times$ mean) OR appears in $< 50\%$ of months OR CV/slope in the top third. These are topics that emerged recently or surged.
-  \item \textbf{Seasonal}: everything else --- moderate variation without extreme spikes.
+  \item \textbf{Stable}: appears in $\geq 70\%$ of months AND CV in the bottom third across topics AND low normalised slope. These are stable, ever-present discussion themes.
+  \item \textbf{Spike-prone}: has a spike (some month $> 2\times$ mean) OR appears in $< 50\%$ of months OR CV/slope in the top third. These are topics that emerged recently or surged.
+  \item \textbf{Variable}: everything else --- moderate variation without extreme spikes.
 \end{itemize}
 
-The relative thresholding (using percentiles of CV and slope distributions) was introduced because in the \texttt{r/jobs} corpus, all topics appear in nearly every month. Absolute thresholds like ``presence $< 50\%$'' would classify nothing as trending, since the subreddit consistently generates posts across all themes.
+The relative thresholding (using percentiles of CV and slope distributions) was introduced because in the \texttt{r/jobs} corpus, all topics appear in nearly every month. Absolute thresholds like ``presence $< 50\%$'' would classify nothing as trending, since the subreddit consistently generates posts across all themes. For this reason, the application shows all month-by-month topic trajectories and the underlying metrics rather than asking users to trust the label alone.
 
 
 \subsection{Stance Detection}
@@ -272,11 +274,11 @@ For each topic, we perform zero-shot stance classification on comments to measur
 \begin{enumerate}[leftmargin=*]
   \item \textbf{Discussion frame construction}: for each topic, the top 5 highest-scored posts are loaded. Their titles and the topic's display label are combined into a broader reference frame, e.g., ``\textit{Topic focus: Interview Process Frustrations. Representative posts: Why do employers ghost candidates? | ...}''.
   
-  \item \textbf{Classifier}: the \texttt{facebook/bart-large-mnli} model is used in a zero-shot classification pipeline with candidate labels:
+  \item \textbf{Classifier}: the \texttt{facebook/bart-large-mnli} model is used in a zero-shot classification pipeline. After inspecting the initial cached results, I revised the label wording to reduce the tendency to classify practical advice as opposition. The final candidate labels are:
   \begin{itemize}
-    \item ``supporting the parent post''
-    \item ``opposing the parent post''
-    \item ``neutral or unclear''
+    \item ``validates the parent author's concern''
+    \item ``challenges the parent author's interpretation''
+    \item ``gives practical advice or is unclear''
   \end{itemize}
   
   \item \textbf{Input formatting}: each comment is paired with its parent post title (truncated to 96 characters) and comment body (truncated to 180 characters), formatted as: ``\texttt{Post: [title] Comment: [body]}''.
@@ -303,6 +305,10 @@ For each topic, the module produces:
 \end{itemize}
 
 Up to 100 comments per topic are classified (sorted by Reddit score to prioritise high-engagement responses).
+
+\subsubsection{Interpretation Caveat}
+
+The stance percentages should be interpreted as \textbf{alignment with a framing}, not as a universal pro/con vote on the whole topic. The first cached run showed low ``for'' agreement across most topics, with many topics dominated by opposing or neutral comments. Manual inspection suggested this was partly a modelling artifact: top Reddit comments often provide corrective advice, skepticism, or next steps, and a blunt ``supporting/opposing the parent post'' label can classify that advice as opposition. The revised label set treats practical advice as neutral/unclear unless it explicitly validates or challenges the author's interpretation.
 
 
 \subsubsection{Design Rationale}
@@ -354,7 +360,7 @@ Each BERTopic-discovered topic is indexed as a synthetic summary chunk containin
 \begin{itemize}[leftmargin=*]
   \item The display label and raw BERTopic label
   \item Keywords, post count, and corpus share percentage
-  \item Trend type (persistent/trending/seasonal)
+  \item Trend signal (stable/spike-prone/variable, derived from the original trend cache)
   \item Stance summary (for/opposing/neutral percentages)
   \item Top representative arguments per stance
   \item Representative post excerpts
@@ -581,7 +587,7 @@ adversarial     & 0.190 & 2 \\
 \end{tabular}
 \end{table}
 
-Romanised and Reddit-slang inputs achieve the highest chrF scores (0.261, 0.262) because shared English vocabulary acts as character-level anchoring. Multi-hop reasoning (0.161) is the weakest category, consistent with the challenge of combining evidence from multiple retrieval results.
+Romanised and Reddit-slang inputs achieve the highest chrF scores (0.261, 0.262) because shared English vocabulary acts as character-level anchoring. Multi-hop reasoning (0.161) is the weakest category, consistent with the challenge of combining evidence from multiple retrieval results. The final Streamlit Evaluation page visualises these edge cases directly with grouped bar charts for chrF and citation presence by tag, making it easier to see which Hindi input styles are robust and which remain fragile.
 
 
 \subsection{Track 3: Extended Retrieval Diagnostics}
@@ -777,19 +783,19 @@ The entire system is delivered through a multi-page Streamlit application with s
 
 \subsection{Dashboard Page}
 
-Displays aggregate corpus statistics via KPI cards (total posts, comments, unique authors, average lengths and scores), monthly activity bar charts, flair distribution pie charts, engagement tier breakdowns, score distributions, and average length trends over time.
+Displays aggregate corpus statistics via KPI cards (total posts, comments, unique authors, average lengths and scores). The redesigned dashboard combines posts and collected top comments in a single dual-axis activity chart, shows top flairs as a horizontal leaderboard, presents the engagement tier mix, and adds a topic leaderboard so viewers can understand the corpus before moving into deeper analysis.
 
 \subsection{Topic Analysis Page}
 
-Presents discovered topics as interactive cards with display labels, keyword badges, corpus share percentages, and trend-type badges. A topic-vs-flair analysis chart identifies gaps where topics are not well-covered by existing Reddit flairs. Expandable details show representative posts and model-assigned labels.
+Presents discovered topics through a ranked topic distribution chart, topic-vs-flair coverage analysis, a sortable overview table, and a focused topic inspector. The earlier card-heavy layout was replaced because it hid too much information behind repeated expanders. The final version lets users scan topic size, keyword fingerprints, flair fit, and trend signal first, then inspect one selected topic's representative posts and flair breakdown.
 
 \subsection{Trends Page}
 
-Visualises trending vs.\ persistent classifications with monthly sparklines colour-coded by trend type (green for persistent, amber for trending, cyan for seasonal). Narrative summaries automatically describe the temporal dynamics of the corpus.
+Visualises all topic trajectories as visible small multiples, so users no longer need to click through each topic to inspect its graph. The page reframes the original persistent/trending/seasonal buckets as \textbf{stable}, \textbf{spike-prone}, and \textbf{variable} signals, and includes the underlying metrics (presence, CV, mean/month, peak month, peak count, and spike flag). This design reflects the fact that most topics appear in most months and therefore should be interpreted through the metrics rather than the label alone.
 
 \subsection{Stance Detection Page}
 
-Displays per-topic stance distributions with stacked bars (for/opposing/neutral) and representative argument quotes styled with colour-coded borders. Users can explore individual topic stances and their top arguments.
+Displays per-topic stance distributions with a horizontal stacked comparison chart, summary cards for the most aligned, most contested, and most ambiguous topics, and a single-topic inspector for representative comments. The page now includes an explicit caveat that the cached stance results may over-count opposition because advice-heavy Reddit comments can be interpreted as disagreement by a zero-shot classifier.
 
 \subsection{Question Answering Page}
 
@@ -801,14 +807,22 @@ Provides an interactive QA interface with:
   \item Expandable evidence details showing source type, topic, flair, month, and score
 \end{itemize}
 
+\subsection{Evaluation Page}
+
+The Evaluation page presents both table and chart views for the final project metrics. English RAG and Hindi cross-lingual results are visualised with grouped comparison charts across answer-overlap, citation, and refusal metrics. Retrieval-only rows are filtered out of the main model comparison so the page focuses on Groq vs.\ Gemini. The Hindi section includes edge-case visualisations for code-mixed, romanised, named-entity, Reddit-slang, multi-hop, standard, and adversarial subsets. Short inference notes below the charts explain which model or edge case is strongest and why.
+
+\subsection{Bias and Ethics Page}
+
+The Bias and Ethics page contains assignment-specific reflective notes. It uses lightweight lexical probes over the local corpus to surface identity-sensitive employment discussions (gender/pregnancy/parenthood, race/nationality/visa, age, disability/health). The page also discusses anonymisation risk, re-identification through combined context, and the right-to-be-forgotten limitation for a static course-project corpus and derived RAG artifacts.
+
 \subsection{Design Choices}
 
-The application uses a custom dark-theme CSS system with:
+The final application uses a custom pastel CSS system with:
 \begin{itemize}[leftmargin=*]
-  \item Inter font family (Google Fonts) for clean, modern typography.
-  \item Purple accent palette (\texttt{\#8b5cf6}, \texttt{\#c4b5fd}) for interactive elements.
-  \item Glassmorphism-inspired card components with subtle hover effects.
-  \item Plotly charts configured with a transparent dark theme matching the application aesthetic.
+  \item Inter and Space Grotesk fonts for readable body text and more distinctive page headings.
+  \item A warm cream background with soft teal, rose, sage, gold, and lavender accents.
+  \item Solid pastel panels rather than the original black/red or dark gradient theme.
+  \item Plotly charts configured with a light theme matching the application aesthetic.
   \item All visualisations are generated using Plotly Express and Plotly Graph Objects for interactivity.
 \end{itemize}
 
@@ -863,6 +877,10 @@ Package management & uv (pyproject.toml) \\
   \item \textbf{Comment reranking bias}: the comment probe analysis shows that the reranking formula deprioritises comments relative to posts and topic summaries. Tuning the query-type-specific source boosts could improve comment visibility for opinion queries.
   
   \item \textbf{Topic model granularity}: with a minimum cluster size of 150, some fine-grained themes may be absorbed into broader topics. Reducing this parameter would yield more specific topics but also more fragmentation and noise.
+
+  \item \textbf{Trend label uncertainty}: stable/spike-prone/variable labels are heuristic. Because most discovered themes appear across most months, the application displays all topic trajectories and metrics so the label does not become a false authority.
+
+  \item \textbf{Stance label sensitivity}: the initial stance cache showed very low agreement because zero-shot labels can classify advice or skepticism as opposition. The stance implementation was updated to use softer labels that separate validation, challenge, and practical/unclear advice, but the cache must be regenerated for the displayed numbers to reflect the updated labels.
   
   \item \textbf{Temporal scope}: the corpus spans $\sim$12 months. Longer collection windows would better capture seasonal patterns and long-term trends but at proportionally higher storage and compute costs.
 \end{itemize}
@@ -877,13 +895,14 @@ This project demonstrates a comprehensive NLP pipeline for analysing informal co
 
 The multi-track evaluation framework goes beyond standard answer-similarity metrics to probe retrieval behaviour, cross-lingual robustness, citation grounding, and causal-language discipline. The interactive Streamlit dashboard makes the analysis accessible to non-technical users.
 
-Key contributions include:
+Key course-project contributions include:
 \begin{enumerate}[leftmargin=*]
-  \item A production-quality data pipeline with comprehensive cleaning and jargon normalisation.
+  \item A reproducible data pipeline with comprehensive cleaning and jargon normalisation.
   \item A three-channel hybrid retrieval system with query-type-aware reranking.
   \item Hindi cross-lingual QA evaluation with retrieval bridge queries and character-level metrics.
   \item Extended retrieval diagnostics including paraphrase stability and comment retrievability probes.
   \item A causal-overclaim audit framework for grounding discipline in corpus-backed QA.
+  \item A redesigned Streamlit interface with pastel styling, clearer topic/trend/stance layouts, evaluation visualisations, and assignment-specific bias and ethics notes.
 \end{enumerate}
 
 Future work could explore multilingual embedding models to eliminate the retrieval bridge dependency, cross-encoder reranking for improved paraphrase stability, and fine-tuned stance classifiers with Reddit-specific training data.
