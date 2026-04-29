@@ -1849,6 +1849,27 @@ def render_evaluation():
         </div>
         """, unsafe_allow_html=True)
 
+        with st.expander("Sample Responses vs Ground Truth"):
+            st.markdown("**Question:** How large is the collected r/jobs corpus?")
+            st.markdown("**Ground Truth:** The cleaned corpus contains about 24,932 posts and 93,501 collected top comments from r/jobs, covering April 2025 through March 2026.")
+            st.markdown("**Groq:** The collected r/jobs corpus contains 24,932 posts and 93,501 collected top comments [sql:corpus_counts]. This information provides a clear count of the corpus size, making other evidence, such as posts about job searching or specific job topics, irrelevant to answering the question about the corpus size.")
+            st.markdown("**Gemini:** The collected r/jobs corpus contains 24,932 posts and 93,501 collected top comments [sql:corpus_counts].")
+            st.markdown("---")
+            st.markdown("**Question:** What do users say about difficult bosses or manager conflict?")
+            st.markdown("**Ground Truth:** Users frequently advise documenting incidents, protecting oneself, avoiding unnecessary confrontation, and looking for another role when management behavior seems retaliatory, exploitative, or unstable.")
+            st.markdown("**Groq:** Users in the r/jobs subreddit tend to express negative experiences with difficult bosses or manager conflict, describing behaviors such as condescending and nitpicky behavior [post:1okjk5w], micromanaging [comment:mlhgovt], and creating conflict for no reason [comment:mlhgovt].")
+            st.markdown("**Gemini:** Users on r/jobs describe difficult bosses as those who micromanage, create conflict, and retain poor employees due to personal relationships [comment:mlhgovt, comment:n8ftu4c]. They can be condescending, nitpicky, sarcastic, and passive-aggressive, often dismissing their behavior as \"not personal\" [post:1okjk5w].")
+            st.markdown("---")
+            st.markdown("**Question:** What do users seem to think about LinkedIn recruiter messages and job scams?")
+            st.markdown("**Ground Truth:** Users often treat suspicious LinkedIn recruiter messages, vague job listings, unusual interview steps, and too-good-to-be-true opportunities with caution. The community tends to advise checking legitimacy before sharing personal information or continuing with a process.")
+            st.markdown("**Groq:** Users on the subreddit tend to be skeptical of LinkedIn recruiter messages and job postings, with many considering them potential scams [comment:ndms9ju, comment:ndmq17e]. Some users have reported receiving scammy phone calls or messages after applying for remote jobs on LinkedIn.")
+            st.markdown("**Gemini:** Users on r/jobs tend to view a significant portion of remote job listings and recruiter messages on LinkedIn as scams [comment:ndms9ju, comment:ndmq17e]. Many users report receiving scammy phone calls or messages via WhatsApp after applying to jobs on LinkedIn.")
+            st.markdown("---")
+            st.markdown("**Question:** How do users talk about job searching and applications?")
+            st.markdown("**Ground Truth:** Many users describe job searching as frustrating, slow, and uncertain, especially when applications receive no response. Advice tends to focus on improving resumes, applying strategically, networking, and managing expectations in a difficult market.")
+            st.markdown("**Groq:** Users on the r/jobs subreddit tend to express frustration and skepticism about the job searching and application process, particularly with the increasing use of AI in applications [post:1qc9nof:chunk:0, comment:nzgku8a].")
+            st.markdown("**Gemini:** Users on r/jobs express that job searching and applications can feel dehumanizing, impersonal, and like \"talking to a wall\" [post:1jqv3ek:chunk:0].")
+
         best_rouge = english.sort_values("rouge_l", ascending=False).iloc[0]
         best_citation = english.sort_values("citation_presence_rate", ascending=False).iloc[0]
         st.markdown(f"""
@@ -1892,7 +1913,6 @@ def render_evaluation():
                 "Citation presence": pct(row.get("citation_presence_rate")),
                 "Citation validity": pct(row.get("mean_citation_validity")),
                 "Refusal accuracy": pct(row.get("adversarial_refusal_accuracy")),
-                "Causal claim rate": pct(row.get("causal_claim_rate")),
                 "Manual fluency": dec(row.get("fluency_mean_manual"), 2) if row.get("fluency_reviewed", 0) else "pending",
                 "Manual adequacy": dec(row.get("adequacy_mean_manual"), 2) if row.get("adequacy_reviewed", 0) else "pending",
             })
@@ -1973,51 +1993,27 @@ def render_evaluation():
                     tag_display[col] = tag_display[col].map(lambda value: pct(value))
             st.dataframe(tag_display, use_container_width=True, hide_index=True)
 
-    section_divider()
+        with st.expander("Sample Responses vs Ground Truth"):
+            st.markdown("**Question:** इकट्ठा किया गया r/jobs कॉर्पस कितना बड़ा है?")
+            st.markdown("**Ground Truth:** साफ़ किए गए कॉर्पस में लगभग 24,932 पोस्ट और 93,501 इकट्ठा किए गए शीर्ष टिप्पणियाँ हैं। यह डेटा अप्रैल 2025 से मार्च 2026 तक फैला है।")
+            st.markdown("**Groq:** इकट्ठा किया गया r/jobs कॉर्पस का आकार 24,932 पोस्ट और 93,501 एकत्रित शीर्ष टिप्पणियों का है [sql:corpus_counts]। यह जानकारी सीधे कॉर्पस की गणना से प्राप्त की गई है...")
+            st.markdown("**Gemini:** साफ़ किए गए r/jobs कॉर्पस में कुल 24,932 पोस्ट और 93,501 शीर्ष टिप्पणियाँ शामिल हैं [sql:corpus_counts]। यह डेटाबेस समुदाय की चर्चाओं का एक व्यापक संग्रह प्रदान करता है।")
+            st.markdown("---")
+            st.markdown("**Question:** खोजे गए topic model में सबसे बड़े broad topics कौन-से हैं?")
+            st.markdown("**Ground Truth:** सबसे बड़े topics में manager conflict और firing, entry-level job search और career starts, quitting और burnout, applications और resumes, और interview follow-ups या offer delays शामिल हैं।")
+            st.markdown("**Groq:** खोजे गए टॉपिक मॉडल में सबसे बड़े ब्रॉड टॉपिक्स एआई, टेक, यूजिंग, टूल्स, और यूज़ से संबंधित हैं [post:1kxgv7x], [post:1p1g9ja]। इन टॉपिक्स में एआई के बढ़ते प्रभाव और इसके कारण होने वाले रोजगार परिवर्तनों पर चर्चा की गई है।")
+            st.markdown("**Gemini:** सबसे बड़े विषयों में एआई (AI), तकनीक (Tech), टूल्स (Tools) का उपयोग शामिल है [post:1kxgv7x, post:1p1g9ja]। इसके अतिरिक्त, कुछ विषय 'Outlier / Uncategorised' के रूप में वर्गीकृत किए गए हैं।")
+            st.markdown("---")
+            st.markdown("**Question (Adversarial):** Antarctica mein quantum computing careers ke baare mein r/jobs users kya bolte hain?")
+            st.markdown("**Ground Truth:** कॉर्पस में Antarctica में quantum computing careers के बारे में उत्तर देने के लिए पर्याप्त साक्ष्य नहीं हैं।")
+            st.markdown("**Groq:** Antarctica mein quantum computing careers ke baare mein r/jobs users ki raay ko lekar koi vishesh jaankari uplabdh nahin hai. [Evidence 1] se [Evidence 10] tak, kisi bhi evidence mein Antarctica ya quantum computing careers ke baare mein charcha nahin ki gayi hai. Isliye, hum yeh keh sakte hain ki corpus mein is vishay par paryapt pramaan nahin hai.")
+            st.markdown("**Gemini:** दिए गए कॉर्पस में अंटार्कटिका में क्वांटम कंप्यूटिंग करियर के बारे में कोई जानकारी नहीं है। r/jobs पर इस विषय में चर्चा नहीं की गई है।")
+            st.markdown("---")
+            st.markdown("**Question (Adversarial/Code Mix):** कौन-सी exact company ko r/jobs users sabse best employer bolte hain?")
+            st.markdown("**Ground Truth:** कॉर्पस में यह तय करने के लिए पर्याप्त साक्ष्य नहीं हैं कि कौन-सी एक exact company सबसे ज़्यादा recommended employer है।")
+            st.markdown("**Groq:** र/jobs उपयोगकर्ता किस कंपनी को सबसे अच्छा नियोक्ता मानते हैं, इसके बारे में स्पष्ट जानकारी नहीं है। हालांकि, कुछ उपयोगकर्ताओं ने कुछ कंपनियों का उल्लेख किया है, जैसे कि बर्कशायर हैथवे [comment:ns66t23] और रेडिट [comment:ns5wu0w]। लेकिन यह जानकारी पर्याप्त नहीं है और यह निष्कर्ष निकालने के लिए पर्याप्त नहीं है कि कौन सी कंपनी सबसे अच्छी है।")
+            st.markdown("**Gemini:** r/jobs कॉर्पस में कोई एक 'सबसे अच्छी' कंपनी के रूप में स्पष्ट रूप से अनुशंसित नहीं है। अलग-अलग उपयोगकर्ताओं के अनुभव अलग-अलग कंपनियों के साथ अलग-अलग होते हैं।")
 
-    # if not diagnostics.empty:
-    #     st.subheader("Extended Retrieval Diagnostics")
-    #     st.caption("Retriever checks from the report: source preservation, comment evidence, paraphrase stability, and causal-claim flags")
-    #     display_rows = []
-    #     for _, row in diagnostics.iterrows():
-    #         display_rows.append({
-    #             "n": int(row["n"]),
-    #             "Query type accuracy": pct(row["query_type_accuracy"]),
-    #             "Source hit rate": pct(row["source_type_hit_rate"]),
-    #             "Comment satisfaction": pct(row["comment_required_satisfaction_rate"]),
-    #             "Avg comment evidence": dec(row["average_comment_evidence_count"], 2),
-    #             "Paraphrase Jaccard": dec(row["paraphrase_mean_jaccard"]),
-    #             "Citation presence": pct(row["citation_presence_rate"]),
-    #             "Causal claim rate": pct(row["causal_claim_rate"]),
-    #         })
-    #     st.dataframe(display_rows, use_container_width=True, hide_index=True)
-    #     if display_rows:
-    #         st.markdown(f"""
-    #         <div class="soft-callout">
-    #             <strong>Inference:</strong> the retriever is strong at returning required source types and comment evidence,
-    #             but paraphrase overlap is lower. That means semantically similar questions can still pull somewhat different
-    #             evidence sets, so answer stability depends on reranking and citation discipline.
-    #         </div>
-    #         """, unsafe_allow_html=True)
-
-    # if not comment_probe.empty:
-    #     st.markdown("**Sampled comment retrievability probes**")
-    #     probe_rows = []
-    #     for _, row in comment_probe.iterrows():
-    #         probe_rows.append({
-    #             "Sampled probes": int(row["n"]),
-    #             "Initial hit rate": pct(row["initial_hit_rate"]),
-    #             "Final hit rate": pct(row["final_hit_rate"]),
-    #             "Mean final rank when hit": dec(row["mean_final_rank_when_hit"], 2),
-    #         })
-    #     st.dataframe(probe_rows, use_container_width=True, hide_index=True)
-    #     st.markdown("""
-    #     <div class="soft-callout">
-    #         <strong>Inference:</strong> the sampled probes show whether individual comments survive from initial retrieval
-    #         into the final reranked evidence. A lower final-hit rate is expected when reranking prefers broader topic summaries
-    #         or higher-karma neighboring evidence over the exact sampled comment.
-    #     </div>
-    #     """, unsafe_allow_html=True)
 
 
 # ════════════════════════════════════════════════════════════════════════

@@ -590,66 +590,7 @@ adversarial     & 0.190 & 2 \\
 Romanised and Reddit-slang inputs achieve the highest chrF scores (0.261, 0.262) because shared English vocabulary acts as character-level anchoring. Multi-hop reasoning (0.161) is the weakest category, consistent with the challenge of combining evidence from multiple retrieval results. The final Streamlit Evaluation page visualises these edge cases directly with grouped bar charts for chrF and citation presence by tag, making it easier to see which Hindi input styles are robust and which remain fragile.
 
 
-\subsection{Track 3: Extended Retrieval Diagnostics}
-\label{sec:eval-diagnostics}
-
-Beyond answer-level metrics, the diagnostics track evaluates \textbf{retrieval behaviour}:
-
-\subsubsection{Query Type Accuracy}
-
-Each diagnostic question specifies its expected query type (factual, trend, opinion, general). The metric is the fraction of questions where the system's automatic classification matches the expected type.
-
-\subsubsection{Structure Preservation (Source-Type Hit Rate)}
-
-Questions specify which evidence source types \textit{must} appear in the top-$k$ results (e.g., a factual question about corpus size should retrieve \texttt{sql\_fact} evidence). The hit rate measures whether the retriever surfaces the correct evidence categories.
-
-\subsubsection{Comment Requirement Satisfaction}
-
-For opinion and comment-heavy questions, a minimum number of comment-type evidence items is required. The satisfaction rate measures compliance.
-
-\subsubsection{Paraphrase Stability}
-
-Paraphrase groups contain semantically equivalent queries (e.g., ``What are the most discussed topics?'' and ``Which themes come up most often?''). For each pair within a group, the Jaccard similarity of their retrieved evidence ID sets is computed. High Jaccard indicates stable retrieval under paraphrasing.
-
-\begin{table}[H]
-\centering
-\caption{Extended retrieval diagnostics.}
-\label{tab:diagnostic-metrics}
-\begin{tabular}{llllll}
-\toprule
-Model & Query Type Acc. & Source Hit & Comment Sat. & Avg Comment Ev. & Paraphrase Jaccard \\
-\midrule
-retrieval\_only & 0.667 & 1.000 & 1.000 & 5.83 & 0.213 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-
-\subsubsection{Comment Retrievability Probes}
-
-A separate probe routine tests whether specific comments can be retrieved when used as query seeds:
-
-\begin{enumerate}[leftmargin=*]
-  \item \textbf{Stratified sampling}: 24 comments are selected across month $\times$ score-bucket strata (low/mid/high thirds by karma).
-  \item \textbf{Probe query construction}: for each sampled comment, a synthetic query is built from its parent post title, topic label, and comment excerpt.
-  \item \textbf{Metrics}: initial hit rate (comment appears in vector candidates), final hit rate (comment appears in reranked top-$k$), and mean final rank when hit.
-\end{enumerate}
-
-\begin{table}[H]
-\centering
-\caption{Sampled comment retrievability probes.}
-\label{tab:comment-probes}
-\begin{tabular}{llll}
-\toprule
-Sampled Probes & Initial Hit Rate & Final Hit Rate & Mean Final Rank \\
-\midrule
-6.00 & 0.833 & 0.500 & 7.67 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-
-\subsection{Track 4: Causal Overclaim Audit}
+\subsection{Track 3: Causal Overclaim Audit}
 \label{sec:eval-causal}
 
 This track specifically targets \textbf{unsupported causal language} in generated answers. The system's knowledge graph is structural (capturing Reddit relationships like post--comment, post--topic, post--month), \textit{not} causal. It does not model or identify causal effects.
